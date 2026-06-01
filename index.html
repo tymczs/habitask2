@@ -861,6 +861,7 @@ async function boot(url, password) {
   $('auth-err').textContent = '';
   $('auth-status').textContent = 'Derywacja klucza…';
   workerUrl = url.replace(/\/$/, '');
+
   try {
     cryptoKey = await deriveKey(password, 'chronos-salt-v1');
   } catch (e) {
@@ -868,34 +869,41 @@ async function boot(url, password) {
     $('auth-status').textContent = '';
     return;
   }
-  $('auth-status').textContent = 'Pobieranie danych z chmury…';
+
+  $('auth-status').textContent = 'Pobieranie listy plików…';
   try {
-    const cipher = await cloudGet();
+    const listResponse = await fetch(workerUrl + '/');
+    const files = await listResponse.json();
+    const latest = files.sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded))[0];
+    const target = latest ? latest.key : 'timeline-db.enc';
+
+    $('auth-status').textContent = 'Pobieranie danych…';
+    const cipher = await fetch(workerUrl + '/' + target).then(r => r.text());
+
     if (cipher) {
       try {
         const plain = await decryptData(cryptoKey, cipher);
         const parsed = JSON.parse(plain);
         if (Array.isArray(parsed)) {
           S.db = parsed;
-          const maxId = S.db.reduce((m, t) => {
-            const n = parseInt(t.id, 10);
-            return isNaN(n) ? m : Math.max(m, n);
-          }, 0);
-          S.nextId = maxId + 1;
+        } else {
+          S.db = [];
         }
-      } catch (_) {
-        $('auth-err').textContent = 'Błąd deszyfrowania — złe hasło lub uszkodzone dane.';
-        $('auth-status').textContent = '';
-        cryptoKey = null;
-        return;
+      } catch (e) {
+        throw new Error('Błąd deszyfrowania lub złe hasło');
       }
+    } else {
+      S.db = [];
     }
   } catch (e) {
-    $('auth-err').textContent = 'Błąd połączenia z Worker: ' + e.message;
+    $('auth-err').textContent = 'Błąd połączenia: ' + e.message;
     $('auth-status').textContent = '';
     cryptoKey = null;
     return;
   }
+
+  const maxId = S.db.length > 0 ? Math.max(...S.db.map(t => parseInt(t.id) || 0)) : 0;
+  S.nextId = maxId + 1;
 
   $('auth').style.display = 'none';
   $('app').style.display = 'flex';
@@ -914,7 +922,6 @@ async function boot(url, password) {
   window.addEventListener('resize', resize);
   resize();
 }
-
 $('auth-btn').addEventListener('click', () => {
   const url = $('auth-url').value.trim();
   const pass = $('auth-pass').value;
@@ -947,16 +954,20 @@ $('file-upload').addEventListener('change', async (e) => {
     try {
       const importedDb = JSON.parse(event.target.result);
       if (!Array.isArray(importedDb)) throw new Error("Format bazy");
+      
       saveHistory();
       S.db = importedDb;
       render();
-      const filename = `timeline-db-v${Date.now()}.json`;
+      
+      const filename = `timeline-db-v${Date.now()}.enc`;
+      const encrypted = await encryptData(cryptoKey, JSON.stringify(S.db));
+      
       await fetch(workerUrl + '/' + filename, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(S.db, null, 2)
-        });
-      alert("Wgrano: " + filename);
+        headers: { 'Content-Type': 'text/plain' },
+        body: encrypted
+      });
+      alert("Wgrano zaszyfrowany plik: " + filename);
     } catch (err) {
       alert("Błąd: " + err.message);
     }
