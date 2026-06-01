@@ -963,6 +963,23 @@ $('file-upload').addEventListener('change', async (e) => {
   };
   reader.readAsText(file);
 });
+window.addEventListener('load', () => {
+  const url = localStorage.getItem('chronos_url');
+  const pass = localStorage.getItem('chronos_pass');
+  if (url && pass) {
+    $('auth-url').value = url;
+    $('auth-pass').value = pass;
+  }
+});
+
+$('auth-btn').addEventListener('click', () => {
+  const url = $('auth-url').value.trim();
+  const pass = $('auth-pass').value;
+  if (!url || !pass) { $('auth-err').textContent = 'Podaj URL i hasło.'; return; }
+  localStorage.setItem('chronos_url', url);
+  localStorage.setItem('chronos_pass', pass);
+  boot(url, pass);
+});
 </script>
 </body>
 </html>
