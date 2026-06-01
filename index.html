@@ -7,7 +7,7 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root {
+:root{
   --bg:#0a0a0c;--bg2:#111114;--bg3:#1a1a1f;--bg4:#222228;
   --border:#2a2a32;--border2:#3a3a45;
   --text:#e8e8f0;--text2:#9090a0;--text3:#555560;
@@ -73,11 +73,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   font-family:var(--font-ui);
 }
 #hover-label{
-  position:fixed;bottom:60px;right:20px;
+  position:fixed;pointer-events:none;z-index:100;display:none;
   background:var(--bg3);border:1px solid var(--accent);
-  padding:6px 12px;font-size:11px;color:var(--accent);
-  pointer-events:none;z-index:100;display:none;
+  padding:6px 13px;font-size:35px;color:var(--accent);
   font-family:var(--font-ui);letter-spacing:0.05em;
+  border-radius:8px;
 }
 #stats{
   flex-shrink:0;height:32px;background:var(--bg2);
@@ -109,6 +109,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .task.done .task-title{text-decoration:line-through;color:var(--text3)}
 .task-meta{font-size:9px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .task-time{font-size:9px;color:var(--accent);margin-top:1px}
+.task-dur-real{font-size:9px;color:var(--accent2);margin-top:1px}
 .task-full .task-title{white-space:normal;font-size:12px}
 .task-full .task-note{font-size:10px;color:var(--text2);margin-top:4px}
 .task-full .task-client{font-size:10px;color:var(--accent3)}
@@ -136,17 +137,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 </div>
 
 <div id="app" style="display:none">
-    <div id="cmd-bar">
-        <span class="logo">CHRONOS</span>
-        <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
-        <span id="cmd-hint"></span>
-        
-        <div style="display:flex; gap:6px; margin-left:12px;">
-          <button id="btn-download" title="Pobierz JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:4px 8px;cursor:pointer;border-radius:3px;">⭳</button>
-          <button id="btn-upload" title="Wgraj JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--accent3);padding:4px 8px;cursor:pointer;border-radius:3px;">⭱</button>
-          <input type="file" id="file-upload" style="display:none" accept=".json">
-        </div>
-      </div>
+  <div id="cmd-bar">
+    <span class="logo">CHRONOS</span>
+    <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
+    <span id="cmd-hint"></span>
+    <div style="display:flex;gap:6px;margin-left:12px;">
+      <button id="btn-download" title="Pobierz JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:4px 8px;cursor:pointer;border-radius:3px;">⭳</button>
+      <button id="btn-upload" title="Wgraj JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--accent3);padding:4px 8px;cursor:pointer;border-radius:3px;">⭱</button>
+      <input type="file" id="file-upload" style="display:none" accept=".json">
+    </div>
+  </div>
   <div id="timeline">
     <canvas id="axis-canvas"></canvas>
     <div id="tasks-layer"></div>
@@ -169,8 +169,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <input type="checkbox" id="movable-chk" style="accent-color:var(--accent3);width:12px;height:12px;cursor:pointer">
       <span style="color:var(--text3);letter-spacing:0.04em">MOVABLE</span>
     </label>
-    <div class="stat-item">PAN: <span class="stat-val" id="st-pan">0</span></div>
-    <div class="stat-item">ZOOM: <span class="stat-val" id="st-zoom">1.00</span></div>
     <div class="stat-item" id="st-time">—</div>
     <div id="sync-indicator">[SYNC]</div>
   </div>
@@ -179,7 +177,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <script>
 const MS = { h: 3600000, d: 86400000, w: 604800000, mo: 2592000000, y: 31536000000 };
 const ZOOM_PRESETS = [MS.h * 2, MS.d * 1.5, MS.w, MS.mo, MS.y * 1.2];
-const DB_KEY = 'timeline-db.enc';
 
 const S = {
   pan: 0,
@@ -188,9 +185,11 @@ const S = {
   compactMode: false,
   consoleMode: false,
   editingId: null,
-  holding: { q: false, a: false, z: false, s: false },
+  sToggle: false,
+  holding: { q: false, a: false, z: false },
   db: [],
   nextId: 1,
+  currentFile: 'timeline-db.enc'
 };
 
 let cryptoKey = null;
@@ -200,15 +199,10 @@ const $ = id => document.getElementById(id);
 
 async function deriveKey(password, salt) {
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
-  );
+  const km = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt: enc.encode(salt), iterations: 310000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
+    km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
   );
 }
 
@@ -238,9 +232,10 @@ async function cloudGet() {
 }
 
 async function cloudPut(ciphertext) {
-  const r = await fetch(workerUrl, {
+  const r = await fetch(workerUrl + '/' + S.currentFile, {
     method: 'PUT',
     headers: { 'Content-Type': 'text/plain' },
+    keepalive: true,
     body: ciphertext,
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -262,6 +257,17 @@ async function cloudSave() {
   showSync(false);
 }
 
+async function cloudSaveImmediate() {
+  if (!cryptoKey || !workerUrl) return;
+  showSync(true);
+  try {
+    const plain = JSON.stringify(S.db);
+    const cipher = await encryptData(cryptoKey, plain);
+    await cloudPut(cipher);
+  } catch (_) {}
+  showSync(false);
+}
+
 const historyStack = { stack: [], cursor: -1, maxSize: 60 };
 
 function saveHistory() {
@@ -270,7 +276,6 @@ function saveHistory() {
   historyStack.stack.push(snap);
   if (historyStack.stack.length > historyStack.maxSize) historyStack.stack.shift();
   historyStack.cursor = historyStack.stack.length - 1;
-  cloudSave();
 }
 
 function undo() {
@@ -436,6 +441,7 @@ function drawAxis() {
     t += tick.ms;
   }
 }
+
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
@@ -457,7 +463,7 @@ function renderTasks() {
     if (S.editingId === task.id) el.classList.add('editing-mode');
     if (S.compactMode) el.classList.add('task-compact');
 
-    const h = S.compactMode ? 28 : (S.editingId === task.id ? 80 : 48);
+    const h = S.compactMode ? 28 : (S.editingId === task.id ? 480 : 300);
     el.style.cssText = `left:${x}px;width:${Math.max(wPx,2)}px;height:${h}px`;
     const hue = (String(task.id).split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 37) % 360;
     el.style.borderLeftColor = `hsl(${hue},60%,50%)`;
@@ -476,6 +482,13 @@ function renderTasks() {
       tEl.className = 'task-time';
       tEl.textContent = `${formatTime(task.start,'HH:MM')}–${formatTime(task.start+task.dur,'HH:MM')} · ${formatDur(task.dur)}`;
       inner.appendChild(tEl);
+
+      if (task.dur_real && task.dur_real > 0) {
+        const drEl = document.createElement('div');
+        drEl.className = 'task-dur-real';
+        drEl.textContent = `⏱ real: ${formatDur(task.dur_real)}`;
+        inner.appendChild(drEl);
+      }
     }
 
     if (S.editingId === task.id && (task.komentarz || task.note)) {
@@ -522,8 +535,6 @@ function updateStats() {
   $('st-active').textContent = total - done;
   $('st-done').textContent = done;
   $('st-focus').textContent = S.focusIdx >= 0 && S.db[S.focusIdx] ? (S.db[S.focusIdx].tytul || S.db[S.focusIdx].title || '—') : '—';
-  $('st-pan').textContent = Math.round(S.pan / 60000) + 'm';
-  $('st-zoom').textContent = (S.zoom / MS.h).toFixed(2) + 'h';
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   $('st-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -535,24 +546,39 @@ function parseCommand(raw) {
   const task = {
     id: String(S.nextId++),
     tytul: '', komentarz: '', id_klienta: '', grupa: [],
-    start: 0, dur: MS.h, done: false, wykonano: 0,
+    start: 0, dur: MS.h, dur_real: 0, done: false, wykonano: 0,
     poczatek_realizacji: null, koniec_realizacji: null,
-    pliki: [], linked: [], parent: null, child: [],
+    pliki: [], linked: [], parent: null, child: [], ile_trwalo: '',
   };
   let s = str;
+
   const titleM = s.match(/^'([^']+)'/);
   if (titleM) { task.tytul = titleM[1]; s = s.slice(titleM[0].length).trim(); }
   else {
-    const fw = s.split(/\s+--|\s+@|\s+#|\s+"|\s+\d/)[0];
+    const fw = s.split(/\s+--|\s+@|\s+#|\s+"|\s+~|\s+\d/)[0];
     task.tytul = fw;
     s = s.slice(fw.length).trim();
   }
+
   const noteM = s.match(/--([^-]+)--/);
   if (noteM) { task.komentarz = noteM[1].trim(); s = s.replace(noteM[0],'').trim(); }
+
   const clientM = s.match(/@(\S+)/);
   if (clientM) { task.id_klienta = clientM[1]; s = s.replace(clientM[0],'').trim(); }
+
   const groupM = s.match(/#(\S+)/);
   if (groupM) { task.grupa = [groupM[1]]; s = s.replace(groupM[0],'').trim(); }
+
+  const durRealM = s.match(/\^"(\d+(?:\.\d+)?)(h|m|min)?"/);
+  if (durRealM) {
+    const v = parseFloat(durRealM[1]);
+    task.dur_real = (durRealM[2] || '').toLowerCase() === 'h' ? v * MS.h : v * 60000;
+    s = s.replace(durRealM[0],'').trim();
+  }
+
+  const realM = s.match(/~"([^"]+)"/);
+  if (realM) { task.ile_trwalo = realM[1]; s = s.replace(realM[0],'').trim(); }
+
   const rangeM = s.match(/"(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})"/);
   if (rangeM) {
     const now = new Date();
@@ -569,6 +595,7 @@ function parseCommand(raw) {
     const lastEnd = S.db.reduce((mx, t) => Math.max(mx, t.start + t.dur), Date.now());
     task.start = lastEnd;
   }
+
   task.poczatek_realizacji = new Date(task.start).toISOString();
   task.koniec_realizacji = new Date(task.start + task.dur).toISOString();
   if (!task.tytul) task.tytul = 'Zadanie ' + task.id;
@@ -583,7 +610,7 @@ function openConsole(prefill) {
   S.consoleMode = true;
   cmdInput.readOnly = false;
   cmdInput.value = prefill || '';
-  cmdInput.placeholder = "'Tytuł' --notatka-- @klient #grupa \"2h\" | , — zapisz | Esc — anuluj";
+  cmdInput.placeholder = "'Tytuł' --notatka-- @klient #grupa ^\"dur_real\" \"2h\" | , — zapisz | Esc — anuluj";
   cmdInput.classList.remove('editing');
   cmdInput.focus();
   $('cmd-hint').textContent = editingTask ? 'EDYCJA' : 'NOWE';
@@ -600,6 +627,7 @@ function closeConsole(save) {
           t.id = editingTask.id;
           t.start = editingTask.start;
           t.dur = editingTask.dur;
+          t.dur_real = t.dur_real || editingTask.dur_real || 0;
           t.done = editingTask.done;
           t.wykonano = editingTask.wykonano;
           t.poczatek_realizacji = new Date(t.start).toISOString();
@@ -613,6 +641,7 @@ function closeConsole(save) {
       const t = parseCommand(cmdInput.value);
       if (t) { saveHistory(); S.db.push(t); }
     }
+    cloudSave();
   } else if (!save) {
     S.editingId = null;
     editingTask = null;
@@ -640,16 +669,96 @@ let wasDragging = false;
 
 function isMovable() { return $('movable-chk').checked; }
 
-function pushTasksAfter(movedIdx, newStart) {
-  if (!isMovable()) return;
-  const moved = S.db[movedIdx];
-  const movedEnd = newStart + moved.dur;
+function blockEnd(idx, visited) {
+  if (!visited) visited = new Set();
+  if (visited.has(idx)) return S.db[idx].start + S.db[idx].dur;
+  visited.add(idx);
+  const t = S.db[idx];
+  let end = t.start + t.dur;
+  for (let i = 0; i < S.db.length; i++) {
+    if (i === idx || visited.has(i)) continue;
+    const o = S.db[i];
+    if (o.start < end && o.start + o.dur > t.start) {
+      end = Math.max(end, blockEnd(i, visited));
+    }
+  }
+  return end;
+}
+
+function blockStart(idx, visited) {
+  if (!visited) visited = new Set();
+  if (visited.has(idx)) return S.db[idx].start;
+  visited.add(idx);
+  const t = S.db[idx];
+  let start = t.start;
+  for (let i = 0; i < S.db.length; i++) {
+    if (i === idx || visited.has(i)) continue;
+    const o = S.db[i];
+    if (o.start < t.start + t.dur && o.start + o.dur > t.start) {
+      start = Math.min(start, blockStart(i, visited));
+    }
+  }
+  return start;
+}
+
+function pushRight(movedIdx, depth) {
+  if (depth === undefined) depth = 0;
+  if (depth > S.db.length + 2) return;
+  const t = S.db[movedIdx];
+  const myEnd = t.start + t.dur;
   for (let i = 0; i < S.db.length; i++) {
     if (i === movedIdx) continue;
-    const t = S.db[i];
-    if (t.start < movedEnd && t.start + t.dur > newStart) {
-      t.start += movedEnd - t.start;
-      pushTasksAfter(i, t.start);
+    const o = S.db[i];
+    if (o.start < myEnd && o.start + o.dur > t.start) {
+      const newStart = myEnd;
+      if (newStart !== o.start) {
+        S.db[i].start = newStart;
+        pushRight(i, depth + 1);
+      }
+    }
+  }
+}
+
+function pushLeft(movedIdx, depth) {
+  if (depth === undefined) depth = 0;
+  if (depth > S.db.length + 2) return;
+  const t = S.db[movedIdx];
+  const myStart = t.start;
+  for (let i = 0; i < S.db.length; i++) {
+    if (i === movedIdx) continue;
+    const o = S.db[i];
+    if (o.start < t.start + t.dur && o.start + o.dur > myStart) {
+      const newStart = myStart - o.dur;
+      if (newStart !== o.start) {
+        S.db[i].start = newStart;
+        pushLeft(i, depth + 1);
+      }
+    }
+  }
+}
+
+function resolveOverlapSnap(idx) {
+  const t = S.db[idx];
+  const MAX_ITER = S.db.length * 4 + 8;
+  let iter = 0;
+  let changed = true;
+  while (changed && iter < MAX_ITER) {
+    changed = false;
+    iter++;
+    for (let i = 0; i < S.db.length; i++) {
+      if (i === idx) continue;
+      const o = S.db[i];
+      if (t.start < o.start + o.dur && t.start + t.dur > o.start) {
+        const overlapL = (o.start + o.dur) - t.start;
+        const overlapR = (t.start + t.dur) - o.start;
+        if (overlapL < overlapR) {
+          t.start = o.start - t.dur;
+        } else {
+          t.start = o.start + o.dur;
+        }
+        changed = true;
+        break;
+      }
     }
   }
 }
@@ -681,12 +790,16 @@ tlEl.addEventListener('mousedown', e => {
 });
 
 window.addEventListener('mousemove', e => {
-  if (S.holding.s) {
+  if (S.sToggle) {
     const rect = tlEl.getBoundingClientRect();
     const ms = screenToMs(e.clientX - rect.left);
     const found = S.db.find(t => ms >= t.start && ms <= t.start + t.dur);
     hoverLabel.textContent = found ? (found.tytul || found.title || '') : '';
     hoverLabel.style.display = found ? 'block' : 'none';
+    if (found) {
+      hoverLabel.style.left = (e.clientX + 16) + 'px';
+      hoverLabel.style.top = (e.clientY - 30) + 'px';
+    }
   }
   if (taskDragging && dragTaskIdx >= 0) {
     const dx = e.clientX - dragStartX;
@@ -697,7 +810,12 @@ window.addEventListener('mousemove', e => {
       if (snapped !== dragPreSnap) {
         S.db = JSON.parse(JSON.stringify(S.db));
         S.db[dragTaskIdx].start = snapped;
-        pushTasksAfter(dragTaskIdx, snapped);
+        if (isMovable()) {
+          if (snapped > dragPreSnap) pushRight(dragTaskIdx);
+          else pushLeft(dragTaskIdx);
+        } else {
+          resolveOverlapSnap(dragTaskIdx);
+        }
         dragPreSnap = snapped;
         render();
       }
@@ -714,7 +832,10 @@ window.addEventListener('mousemove', e => {
 window.addEventListener('mouseup', () => {
   if (taskDragging) {
     taskDragging = false;
-    if (wasDragging && dragTaskIdx >= 0) saveHistory();
+    if (wasDragging && dragTaskIdx >= 0) {
+      saveHistory();
+      cloudSave();
+    }
     dragTaskIdx = -1;
     wasDragging = false;
     tlEl.style.cursor = 'default';
@@ -736,7 +857,12 @@ tlEl.addEventListener('click', e => {
   if (e.target === tlEl || e.target === canvas) { S.focusIdx = -1; render(); }
 });
 
-let wheelAccum = 0, wheelTimer = null;
+const scrollState = {
+  q: { accum: 0, timer: null },
+  a: { accum: 0, timer: null },
+  z: { accum: 0, timer: null },
+  pan: { accum: 0, timer: null },
+};
 
 tlEl.addEventListener('wheel', e => {
   e.preventDefault();
@@ -744,43 +870,68 @@ tlEl.addEventListener('wheel', e => {
   const dy = e.deltaY;
 
   if (S.holding.q) {
-    wheelAccum += dy; clearTimeout(wheelTimer);
-    wheelTimer = setTimeout(() => {
-      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
+    scrollState.q.accum += dy;
+    clearTimeout(scrollState.q.timer);
+    scrollState.q.timer = setTimeout(() => {
+      const dir = scrollState.q.accum > 0 ? 1 : -1;
+      scrollState.q.accum = 0;
       if (!S.db.length) return;
-      S.focusIdx = Math.max(0, Math.min(S.db.length-1, (S.focusIdx < 0 ? 0 : S.focusIdx) + dir));
-      render();
-    }, 60);
-    return;
-  }
-  if (S.holding.a) {
-    wheelAccum += dy; clearTimeout(wheelTimer);
-    wheelTimer = setTimeout(() => {
-      if (S.focusIdx < 0 || !S.db[S.focusIdx]) { wheelAccum=0; return; }
-      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
-      saveHistory();
-      S.db[S.focusIdx].start = applySnap(S.db[S.focusIdx].start + dir * snapMs());
-      pushTasksAfter(S.focusIdx, S.db[S.focusIdx].start);
-      render();
-    }, 40);
-    return;
-  }
-  if (S.holding.z) {
-    wheelAccum += dy; clearTimeout(wheelTimer);
-    wheelTimer = setTimeout(() => {
-      if (S.focusIdx < 0 || !S.db[S.focusIdx]) { wheelAccum=0; return; }
-      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
-      const step = snapMs();
-      saveHistory();
-      S.db[S.focusIdx].dur = Math.max(step, applySnap(S.db[S.focusIdx].dur + dir * step));
+      const base = S.focusIdx < 0 ? (dir > 0 ? 0 : S.db.length - 1) : S.focusIdx + dir;
+      S.focusIdx = Math.max(0, Math.min(S.db.length - 1, base));
       render();
     }, 40);
     return;
   }
 
-  wheelAccum += dy; clearTimeout(wheelTimer);
-  wheelTimer = setTimeout(() => {
-    const td = wheelAccum; wheelAccum = 0;
+  if (S.holding.a) {
+    scrollState.a.accum += dy;
+    clearTimeout(scrollState.a.timer);
+    scrollState.a.timer = setTimeout(() => {
+      const accum = scrollState.a.accum;
+      scrollState.a.accum = 0;
+      if (S.focusIdx < 0 || !S.db[S.focusIdx]) return;
+      const dir = accum > 0 ? 1 : -1;
+      const steps = Math.max(1, Math.round(Math.abs(accum) / 100));
+      saveHistory();
+      const snap = snapMs();
+      S.db[S.focusIdx].start = applySnap(S.db[S.focusIdx].start + dir * steps * snap);
+      if (isMovable()) {
+        if (dir > 0) pushRight(S.focusIdx);
+        else pushLeft(S.focusIdx);
+      } else {
+        resolveOverlapSnap(S.focusIdx);
+      }
+      cloudSave();
+      render();
+    }, 40);
+    return;
+  }
+
+  if (S.holding.z) {
+    scrollState.z.accum += dy;
+    clearTimeout(scrollState.z.timer);
+    scrollState.z.timer = setTimeout(() => {
+      const accum = scrollState.z.accum;
+      scrollState.z.accum = 0;
+      if (S.focusIdx < 0 || !S.db[S.focusIdx]) return;
+      const dir = accum > 0 ? 1 : -1;
+      const steps = Math.max(1, Math.round(Math.abs(accum) / 100));
+      const snap = snapMs();
+      saveHistory();
+      S.db[S.focusIdx].dur = Math.max(snap, applySnap(S.db[S.focusIdx].dur + dir * steps * snap));
+      if (isMovable()) pushRight(S.focusIdx);
+      else resolveOverlapSnap(S.focusIdx);
+      cloudSave();
+      render();
+    }, 40);
+    return;
+  }
+
+  scrollState.pan.accum += dy;
+  clearTimeout(scrollState.pan.timer);
+  scrollState.pan.timer = setTimeout(() => {
+    const td = scrollState.pan.accum;
+    scrollState.pan.accum = 0;
     const sign = td > 0 ? 1 : -1;
     const factor = 1 + sign * Math.min(Math.abs(td), 300) * 0.0008;
     S.zoom = Math.max(MS.h * 0.5, Math.min(MS.y * 5, S.zoom * factor));
@@ -797,40 +948,56 @@ window.addEventListener('keydown', e => {
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
+
   if (e.key==='.') { e.preventDefault(); openConsole(); return; }
   if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
-  if (e.key==='q'||e.key==='Q') S.holding.q=true;
-  if (e.key==='a'||e.key==='A') S.holding.a=true;
-  if (e.key==='z'||e.key==='Z') S.holding.z=true;
-  if (e.key==='s'||e.key==='S') S.holding.s=true;
+
+  if (e.key==='q'||e.key==='Q') S.holding.q = true;
+  if (e.key==='a'||e.key==='A') S.holding.a = true;
+  if (e.key==='z'||e.key==='Z') S.holding.z = true;
+
+  if (e.key==='s'||e.key==='S') {
+    e.preventDefault();
+    S.sToggle = !S.sToggle;
+    if (!S.sToggle) hoverLabel.style.display = 'none';
+    return;
+  }
+
   if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
   if (e.key==='t'||e.key==='T') { S.pan=0; render(); return; }
   if (e.key==='c'||e.key==='C') {
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
-      const t=S.db[S.focusIdx]; S.pan=(t.start+t.dur/2)-Date.now();
+      const t=S.db[S.focusIdx]; S.pan=Date.now()-(t.start+t.dur/2);
     }
     render(); return;
   }
   if (e.key==='w'||e.key==='W') { S.compactMode=!S.compactMode; render(); return; }
+
   if (e.key===' ') {
     e.preventDefault();
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
       saveHistory();
-      S.db[S.focusIdx].done=!S.db[S.focusIdx].done;
-      S.db[S.focusIdx].wykonano=S.db[S.focusIdx].done?1:0;
+      const task = S.db[S.focusIdx];
+      task.done = !task.done;
+      task.wykonano = task.done ? 1 : 0;
       render();
+      cloudSaveImmediate();
     }
     return;
   }
+
   if (e.key==='Delete'||e.key==='Backspace') {
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
       saveHistory();
       S.db.splice(S.focusIdx,1);
       S.focusIdx=Math.min(S.focusIdx,S.db.length-1);
-      S.editingId=null; editingTask=null; render();
+      S.editingId=null; editingTask=null;
+      cloudSave();
+      render();
     }
     return;
   }
+
   if (e.key==='e'||e.key==='E') {
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
       editingTask=S.db[S.focusIdx];
@@ -841,6 +1008,8 @@ window.addEventListener('keydown', e => {
       if (t.id_klienta||t.client) cmd+=` @${t.id_klienta||t.client}`;
       if (t.grupa&&t.grupa.length) cmd+=` #${t.grupa[0]}`;
       else if (t.group) cmd+=` #${t.group}`;
+      if (t.dur_real && t.dur_real > 0) cmd+=` ^"${formatDur(t.dur_real)}"`;
+      if (t.ile_trwalo) cmd+=` ~"${t.ile_trwalo}"`;
       cmd+=` "${formatDur(t.dur)}"`;
       openConsole(cmd);
       cmdInput.classList.add('editing');
@@ -850,10 +1019,9 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keyup', e => {
-  if (e.key==='q'||e.key==='Q') S.holding.q=false;
-  if (e.key==='a'||e.key==='A') S.holding.a=false;
-  if (e.key==='z'||e.key==='Z') S.holding.z=false;
-  if (e.key==='s'||e.key==='S') { S.holding.s=false; hoverLabel.style.display='none'; }
+  if (e.key==='q'||e.key==='Q') S.holding.q = false;
+  if (e.key==='a'||e.key==='A') S.holding.a = false;
+  if (e.key==='z'||e.key==='Z') S.holding.z = false;
 });
 
 async function boot(url, password) {
@@ -875,19 +1043,16 @@ async function boot(url, password) {
     const files = await listResponse.json();
     const latest = files.sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded))[0];
     const target = latest ? latest.key : 'timeline-db.enc';
+    S.currentFile = target;
 
     $('auth-status').textContent = 'Pobieranie danych…';
-    const cipher = await fetch(workerUrl + '/' + target).then(r => r.text());
+    const cipher = await fetch(workerUrl + '/' + target, { cache: 'no-store' }).then(r => r.text());
 
     if (cipher) {
       try {
         const plain = await decryptData(cryptoKey, cipher);
         const parsed = JSON.parse(plain);
-        if (Array.isArray(parsed)) {
-          S.db = parsed;
-        } else {
-          S.db = [];
-        }
+        S.db = Array.isArray(parsed) ? parsed.map(t => ({ dur_real: 0, ...t })) : [];
       } catch (e) {
         throw new Error('Błąd deszyfrowania lub złe hasło');
       }
@@ -911,7 +1076,14 @@ async function boot(url, password) {
   if (S.db.length === 0) {
     const now = Date.now();
     S.db = [
-      { id: String(S.nextId++), tytul: 'Pierwsze zadanie', komentarz: 'Skonfiguruj swój projekt', id_klienta: '', grupa: ['start'], start: now + 10*60000, dur: MS.h, done: false, wykonano: 0, poczatek_realizacji: new Date(now+10*60000).toISOString(), koniec_realizacji: new Date(now+10*60000+MS.h).toISOString(), pliki: [], linked: [], parent: null, child: [] },
+      {
+        id: String(S.nextId++), tytul: 'Pierwsze zadanie',
+        komentarz: 'Skonfiguruj swój projekt', id_klienta: '', grupa: ['start'],
+        start: now + 10*60000, dur: MS.h, dur_real: 0, done: false, wykonano: 0,
+        poczatek_realizacji: new Date(now+10*60000).toISOString(),
+        koniec_realizacji: new Date(now+10*60000+MS.h).toISOString(),
+        pliki: [], linked: [], parent: null, child: [], ile_trwalo: ''
+      },
     ];
   }
   S.focusIdx = 0;
@@ -921,11 +1093,23 @@ async function boot(url, password) {
   window.addEventListener('resize', resize);
   resize();
 }
+
+window.addEventListener('load', () => {
+  const url = localStorage.getItem('chronos_url');
+  const pass = localStorage.getItem('chronos_pass');
+  if (url && pass) {
+    $('auth-url').value = url;
+    $('auth-pass').value = pass;
+  }
+});
+
 $('auth-btn').addEventListener('click', () => {
   const url = $('auth-url').value.trim();
   const pass = $('auth-pass').value;
   if (!url) { $('auth-err').textContent = 'Podaj URL Workera.'; return; }
   if (!pass) { $('auth-err').textContent = 'Podaj hasło.'; return; }
+  localStorage.setItem('chronos_url', url);
+  localStorage.setItem('chronos_pass', pass);
   boot(url, pass);
 });
 
@@ -953,14 +1137,12 @@ $('file-upload').addEventListener('change', async (e) => {
     try {
       const importedDb = JSON.parse(event.target.result);
       if (!Array.isArray(importedDb)) throw new Error("Format bazy");
-      
       saveHistory();
-      S.db = importedDb;
+      S.db = importedDb.map(t => ({ dur_real: 0, ...t }));
       render();
-      
       const filename = `timeline-db-v${Date.now()}.enc`;
+      S.currentFile = filename;
       const encrypted = await encryptData(cryptoKey, JSON.stringify(S.db));
-      
       await fetch(workerUrl + '/' + filename, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain' },
@@ -972,23 +1154,6 @@ $('file-upload').addEventListener('change', async (e) => {
     }
   };
   reader.readAsText(file);
-});
-window.addEventListener('load', () => {
-  const url = localStorage.getItem('chronos_url');
-  const pass = localStorage.getItem('chronos_pass');
-  if (url && pass) {
-    $('auth-url').value = url;
-    $('auth-pass').value = pass;
-  }
-});
-
-$('auth-btn').addEventListener('click', () => {
-  const url = $('auth-url').value.trim();
-  const pass = $('auth-pass').value;
-  if (!url || !pass) { $('auth-err').textContent = 'Podaj URL i hasło.'; return; }
-  localStorage.setItem('chronos_url', url);
-  localStorage.setItem('chronos_pass', pass);
-  boot(url, pass);
 });
 </script>
 </body>
