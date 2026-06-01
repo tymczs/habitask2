@@ -7,15 +7,15 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
---bg:#0a0a0c;--bg2:#111114;--bg3:#1a1a1f;--bg4:#222228;
---border:#2a2a32;--border2:#3a3a45;
---text:#e8e8f0;--text2:#9090a0;--text3:#555560;
---accent:#4a9eff;--accent2:#ff6b35;--accent3:#00d4a0;
---now:#ff3366;--focus:#ffd700;
---task-bg:#16161e;--task-border:#2e2e3a;
---done:#2a3a2a;--done-border:#3a5a3a;
---font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
+:root {
+  --bg:#0a0a0c;--bg2:#111114;--bg3:#1a1a1f;--bg4:#222228;
+  --border:#2a2a32;--border2:#3a3a45;
+  --text:#e8e8f0;--text2:#9090a0;--text3:#555560;
+  --accent:#4a9eff;--accent2:#ff6b35;--accent3:#00d4a0;
+  --now:#ff3366;--focus:#ffd700;
+  --task-bg:#16161e;--task-border:#2e2e3a;
+  --done:#2a3a2a;--done-border:#3a5a3a;
+  --font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px}
 #auth{
@@ -390,7 +390,7 @@ function drawAxis() {
     return units[units.length - 1];
   }
 
-  ctx.strokeStyle = '#1e1e26';
+  ctx.strokeStyle = '#d0d0c8';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, midY);
@@ -403,12 +403,12 @@ function drawAxis() {
       const ds = new Date(t);
       const x0 = msToScreen(t), x6 = msToScreen(t + 6*MS.h);
       const x22 = msToScreen(t + 22*MS.h), x24 = msToScreen(t + MS.d);
-      ctx.fillStyle = 'rgba(0,0,180,0.04)';
+      ctx.fillStyle = 'rgba(208, 208, 200, 0.05)';
       if (x0 < W && x6 > 0) ctx.fillRect(Math.max(0,x0),0,Math.min(W,x6)-Math.max(0,x0),H);
       if (x22 < W && x24 > 0) ctx.fillRect(Math.max(0,x22),0,Math.min(W,x24)-Math.max(0,x22),H);
       const lx = msToScreen(t + MS.d/2);
       if (lx > 0 && lx < W) {
-        ctx.fillStyle = '#1e1e2a';
+        ctx.fillStyle = '#d0d0c8';
         ctx.font = '10px "JetBrains Mono"';
         ctx.textAlign = 'center';
         ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
@@ -422,13 +422,13 @@ function drawAxis() {
   while (t <= visEnd + tick.ms) {
     const x = msToScreen(t);
     if (x >= -10 && x <= W + 10) {
-      ctx.strokeStyle = '#252530';
+      ctx.strokeStyle = '#d0d0c8';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, midY - 20);
       ctx.lineTo(x, midY + 20);
       ctx.stroke();
-      ctx.fillStyle = '#404050';
+      ctx.fillStyle = '#d0d0c8';
       ctx.font = '10px "JetBrains Mono"';
       ctx.textAlign = 'center';
       ctx.fillText(tick.fmt(t), x, midY + 34);
@@ -436,7 +436,6 @@ function drawAxis() {
     t += tick.ms;
   }
 }
-
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
