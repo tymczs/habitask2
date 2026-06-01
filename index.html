@@ -136,11 +136,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 </div>
 
 <div id="app" style="display:none">
-  <div id="cmd-bar">
-    <span class="logo">CHRONOS</span>
-    <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
-    <span id="cmd-hint"></span>
-  </div>
+    <div id="cmd-bar">
+        <span class="logo">CHRONOS</span>
+        <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
+        <span id="cmd-hint"></span>
+        
+        <div style="display:flex; gap:6px; margin-left:12px;">
+          <button id="btn-download" title="Pobierz JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:4px 8px;cursor:pointer;border-radius:3px;">⭳</button>
+          <button id="btn-upload" title="Wgraj JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--accent3);padding:4px 8px;cursor:pointer;border-radius:3px;">⭱</button>
+          <input type="file" id="file-upload" style="display:none" accept=".json">
+        </div>
+      </div>
   <div id="timeline">
     <canvas id="axis-canvas"></canvas>
     <div id="tasks-layer"></div>
@@ -919,6 +925,43 @@ $('auth-btn').addEventListener('click', () => {
 
 $('auth-pass').addEventListener('keydown', e => {
   if (e.key === 'Enter') $('auth-btn').click();
+});
+
+$('btn-download').addEventListener('click', () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(S.db, null, 2));
+  const a = document.createElement('a');
+  a.setAttribute("href", dataStr);
+  a.setAttribute("download", "chronos_db_" + Date.now() + ".json");
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+$('btn-upload').addEventListener('click', () => $('file-upload').click());
+
+$('file-upload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const importedDb = JSON.parse(event.target.result);
+      if (!Array.isArray(importedDb)) throw new Error("Format bazy");
+      saveHistory();
+      S.db = importedDb;
+      render();
+      const filename = `timeline-db-v${Date.now()}.json`;
+      await fetch(workerUrl + '/' + filename, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(S.db, null, 2)
+        });
+      alert("Wgrano: " + filename);
+    } catch (err) {
+      alert("Błąd: " + err.message);
+    }
+  };
+  reader.readAsText(file);
 });
 </script>
 </body>
