@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHRONOS — 1D Timeline Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#0a0a0c;--bg2:#111114;--bg3:#1a1a1f;--bg4:#222228;
+--border:#2a2a32;--border2:#3a3a45;
+--text:#e8e8f0;--text2:#9090a0;--text3:#555560;
+--accent:#4a9eff;--accent2:#ff6b35;--accent3:#00d4a0;
+--now:#ff3366;--focus:#ffd700;
+--task-bg:#16161e;--task-border:#2e2e3a;
+--done:#2a3a2a;--done-border:#3a5a3a;
+--font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px}
+#auth{
+  position:fixed;inset:0;z-index:9999;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+}
+#auth .logo-big{font-family:var(--font-ui);font-size:32px;font-weight:800;letter-spacing:0.1em;color:var(--accent)}
+#auth .sub{font-size:11px;color:var(--text3);letter-spacing:0.08em}
+#auth-form{display:flex;flex-direction:column;gap:12px;width:300px}
+#auth-url,#auth-pass{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font-mono);font-size:12px;padding:10px 14px;outline:none;border-radius:3px;
+  transition:border-color 0.15s;
+}
+#auth-url:focus,#auth-pass:focus{border-color:var(--accent)}
+#auth-btn{
+  background:var(--accent);color:#000;font-family:var(--font-ui);font-size:12px;
+  font-weight:700;letter-spacing:0.08em;padding:10px;border:none;border-radius:3px;
+  cursor:pointer;transition:opacity 0.15s;
+}
+#auth-btn:hover{opacity:0.85}
+#auth-err{font-size:10px;color:var(--now);text-align:center;min-height:14px;letter-spacing:0.04em}
+#auth-status{font-size:10px;color:var(--text3);text-align:center;letter-spacing:0.04em}
+#app{display:flex;flex-direction:column;height:100vh;width:100vw}
+#cmd-bar{
+  flex-shrink:0;height:48px;background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 16px;
+  font-family:var(--font-ui);
+}
+#cmd-bar .logo{font-size:14px;font-weight:800;letter-spacing:0.08em;color:var(--accent);flex-shrink:0}
+#cmd-input{
+  flex:1;background:var(--bg3);border:1px solid var(--border);
+  color:var(--text);font-family:var(--font-mono);font-size:12px;
+  padding:6px 12px;outline:none;border-radius:3px;
+  transition:border-color 0.15s;
+}
+#cmd-input:focus{border-color:var(--accent)}
+#cmd-input.editing{border-color:var(--focus);border-width:2px}
+#cmd-hint{font-size:10px;color:var(--text3);flex-shrink:0;letter-spacing:0.03em}
+#timeline{
+  flex:1;position:relative;overflow:hidden;
+  background:var(--bg);cursor:default;user-select:none;
+}
+#axis-canvas{position:absolute;inset:0;pointer-events:none}
+#tasks-layer{position:absolute;inset:0;pointer-events:none}
+#now-line{
+  position:absolute;top:0;bottom:0;width:2px;
+  background:var(--now);pointer-events:none;z-index:20;
+  box-shadow:0 0 8px var(--now);
+}
+#now-line::before{
+  content:'NOW';position:absolute;top:8px;left:4px;
+  font-size:9px;font-weight:700;color:var(--now);letter-spacing:0.1em;
+  font-family:var(--font-ui);
+}
+#hover-label{
+  position:fixed;bottom:60px;right:20px;
+  background:var(--bg3);border:1px solid var(--accent);
+  padding:6px 12px;font-size:11px;color:var(--accent);
+  pointer-events:none;z-index:100;display:none;
+  font-family:var(--font-ui);letter-spacing:0.05em;
+}
+#stats{
+  flex-shrink:0;height:32px;background:var(--bg2);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:20px;padding:0 16px;
+  font-size:10px;color:var(--text3);letter-spacing:0.04em;
+}
+.stat-item{display:flex;align-items:center;gap:6px}
+.stat-val{color:var(--text2)}
+#sync-indicator{
+  font-size:10px;color:var(--accent3);letter-spacing:0.06em;
+  opacity:0;transition:opacity 0.2s;
+}
+#sync-indicator.active{opacity:1}
+.task{
+  position:absolute;top:50%;transform:translateY(-50%);
+  background:var(--task-bg);border:1px solid var(--task-border);
+  border-radius:3px;overflow:hidden;cursor:grab;
+  transition:border-color 0.1s,box-shadow 0.1s;
+  pointer-events:auto;font-family:var(--font-mono);
+}
+.task:active{cursor:grabbing}
+.task:hover{border-color:var(--border2)}
+.task.focused{border-color:var(--focus);box-shadow:0 0 0 1px var(--focus)}
+.task.editing-mode{border-color:var(--focus);box-shadow:0 0 0 2px var(--focus),0 0 0 4px rgba(255,215,0,0.15)}
+.task.done{background:var(--done);border-color:var(--done-border);opacity:0.6}
+.task-inner{padding:5px 8px;height:100%}
+.task-title{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.task.done .task-title{text-decoration:line-through;color:var(--text3)}
+.task-meta{font-size:9px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-time{font-size:9px;color:var(--accent);margin-top:1px}
+.task-full .task-title{white-space:normal;font-size:12px}
+.task-full .task-note{font-size:10px;color:var(--text2);margin-top:4px}
+.task-full .task-client{font-size:10px;color:var(--accent3)}
+.task-compact{height:28px!important}
+.task-group-pill{
+  position:absolute;top:-8px;left:4px;
+  font-size:8px;background:var(--bg4);
+  border:1px solid var(--border);padding:1px 5px;
+  color:var(--text3);border-radius:2px;letter-spacing:0.05em;white-space:nowrap;
+}
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <div class="logo-big">CHRONOS</div>
+  <div class="sub">ZERO-KNOWLEDGE CLOUD SYNC</div>
+  <div id="auth-form">
+    <input id="auth-url" type="url" placeholder="Worker URL (https://...)" autocomplete="off" spellcheck="false">
+    <input id="auth-pass" type="password" placeholder="Hasło szyfrowania (AES-256-GCM)" autocomplete="off">
+    <button id="auth-btn">ZALOGUJ I POBIERZ</button>
+    <div id="auth-err"></div>
+    <div id="auth-status"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div id="cmd-bar">
+    <span class="logo">CHRONOS</span>
+    <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
+    <span id="cmd-hint"></span>
+  </div>
+  <div id="timeline">
+    <canvas id="axis-canvas"></canvas>
+    <div id="tasks-layer"></div>
+    <div id="now-line"></div>
+  </div>
+  <div id="hover-label"></div>
+  <div id="stats">
+    <div class="stat-item">ZADANIA: <span class="stat-val" id="st-total">0</span></div>
+    <div class="stat-item">AKTYWNE: <span class="stat-val" id="st-active">0</span></div>
+    <div class="stat-item">WYKONANO: <span class="stat-val" id="st-done">0</span></div>
+    <div class="stat-item">FOCUS: <span class="stat-val" id="st-focus">—</span></div>
+    <div class="stat-item" style="margin-left:auto;gap:6px">
+      <span style="color:var(--text3);letter-spacing:0.04em">SNAP</span>
+      <input id="snap-input" value="5m"
+        style="width:52px;background:var(--bg3);border:1px solid var(--border);color:var(--accent2);
+               font-family:var(--font-mono);font-size:10px;padding:2px 6px;outline:none;
+               border-radius:2px;text-align:center;letter-spacing:0.05em">
+    </div>
+    <label class="stat-item" style="gap:6px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="movable-chk" style="accent-color:var(--accent3);width:12px;height:12px;cursor:pointer">
+      <span style="color:var(--text3);letter-spacing:0.04em">MOVABLE</span>
+    </label>
+    <div class="stat-item">PAN: <span class="stat-val" id="st-pan">0</span></div>
+    <div class="stat-item">ZOOM: <span class="stat-val" id="st-zoom">1.00</span></div>
+    <div class="stat-item" id="st-time">—</div>
+    <div id="sync-indicator">[SYNC]</div>
+  </div>
+</div>
+
+<script>
+const MS = { h: 3600000, d: 86400000, w: 604800000, mo: 2592000000, y: 31536000000 };
+const ZOOM_PRESETS = [MS.h * 2, MS.d * 1.5, MS.w, MS.mo, MS.y * 1.2];
+const DB_KEY = 'timeline-db.enc';
+
+const S = {
+  pan: 0,
+  zoom: 1,
+  focusIdx: -1,
+  compactMode: false,
+  consoleMode: false,
+  editingId: null,
+  holding: { q: false, a: false, z: false, s: false },
+  db: [],
+  nextId: 1,
+};
+
+let cryptoKey = null;
+let workerUrl = '';
+
+const $ = id => document.getElementById(id);
+
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 310000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptData(key, plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  const combined = new Uint8Array(iv.length + ct.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ct), iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptData(key, b64) {
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const iv = raw.slice(0, 12);
+  const ct = raw.slice(12);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
+async function cloudGet() {
+  const r = await fetch(workerUrl, { method: 'GET', cache: 'no-store' });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.text();
+}
+
+async function cloudPut(ciphertext) {
+  const r = await fetch(workerUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/plain' },
+    body: ciphertext,
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+function showSync(on) {
+  const el = $('sync-indicator');
+  if (el) el.classList.toggle('active', on);
+}
+
+async function cloudSave() {
+  if (!cryptoKey || !workerUrl) return;
+  showSync(true);
+  try {
+    const plain = JSON.stringify(S.db);
+    const cipher = await encryptData(cryptoKey, plain);
+    await cloudPut(cipher);
+  } catch (_) {}
+  showSync(false);
+}
+
+const historyStack = { stack: [], cursor: -1, maxSize: 60 };
+
+function saveHistory() {
+  const snap = JSON.parse(JSON.stringify({ db: S.db, focusIdx: S.focusIdx }));
+  historyStack.stack = historyStack.stack.slice(0, historyStack.cursor + 1);
+  historyStack.stack.push(snap);
+  if (historyStack.stack.length > historyStack.maxSize) historyStack.stack.shift();
+  historyStack.cursor = historyStack.stack.length - 1;
+  cloudSave();
+}
+
+function undo() {
+  if (historyStack.cursor <= 0) return;
+  historyStack.cursor--;
+  const snap = historyStack.stack[historyStack.cursor];
+  S.db = JSON.parse(JSON.stringify(snap.db));
+  S.focusIdx = snap.focusIdx;
+  render();
+  cloudSave();
+}
+
+function redo() {
+  if (historyStack.cursor >= historyStack.stack.length - 1) return;
+  historyStack.cursor++;
+  const snap = historyStack.stack[historyStack.cursor];
+  S.db = JSON.parse(JSON.stringify(snap.db));
+  S.focusIdx = snap.focusIdx;
+  render();
+  cloudSave();
+}
+
+function snapMs() {
+  const raw = ($('snap-input') || { value: '5m' }).value.trim();
+  const m = raw.match(/^(\d+(?:\.\d+)?)\s*(h|m|min)?$/i);
+  if (!m) return 5 * 60000;
+  const v = parseFloat(m[1]);
+  return (m[2] || '').toLowerCase() === 'h' ? v * 3600000 : v * 60000;
+}
+
+function applySnap(ms) {
+  const s = snapMs();
+  return Math.round(ms / s) * s;
+}
+
+const canvas = $('axis-canvas');
+const ctx = canvas.getContext('2d');
+const tlEl = $('timeline');
+const tasksLayer = $('tasks-layer');
+const nowLine = $('now-line');
+const cmdInput = $('cmd-input');
+const hoverLabel = $('hover-label');
+
+function resize() {
+  canvas.width = tlEl.offsetWidth;
+  canvas.height = tlEl.offsetHeight;
+  render();
+}
+
+function msToScreen(ms) {
+  const W = canvas.width;
+  const pxPerMs = W / S.zoom;
+  return W / 2 + (ms - Date.now() + S.pan) * pxPerMs;
+}
+
+function screenToMs(px) {
+  const W = canvas.width;
+  const pxPerMs = W / S.zoom;
+  return Date.now() - S.pan + (px - W / 2) / pxPerMs;
+}
+
+function formatTime(ms, fmt) {
+  const MONTHS = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  const d = new Date(ms);
+  return fmt
+    .replace('HH', String(d.getHours()).padStart(2,'0'))
+    .replace('MM', String(d.getMinutes()).padStart(2,'0'))
+    .replace('D', d.getDate())
+    .replace('Mon', MONTHS[d.getMonth()])
+    .replace('YYYY', d.getFullYear())
+    .replace('YY', String(d.getFullYear()).slice(-2));
+}
+
+function formatDur(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm ? `${h}h${rm}m` : `${h}h`;
+}
+
+function drawAxis() {
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(0, 0, W, H);
+
+  const visStart = screenToMs(0);
+  const visEnd = screenToMs(W);
+  const span = visEnd - visStart;
+  const midY = H / 2;
+  const MONTHS = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+
+  function pickTick(span) {
+    const units = [
+      { ms: 60000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: 300000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: 900000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: 1800000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*3, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*6, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*12, fmt: ms => formatTime(ms,'D HH:MM') },
+      { ms: MS.d, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.d*3, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.w, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.d*14, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.mo/4, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.mo, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.mo*3, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.y/2, fmt: ms => formatTime(ms,'Mon YYYY') },
+      { ms: MS.y, fmt: ms => formatTime(ms,'YYYY') },
+    ];
+    const target = W / 6;
+    const pxPerMs = W / span;
+    for (let i = 0; i < units.length; i++) {
+      if (units[i].ms * pxPerMs >= target) return units[i];
+    }
+    return units[units.length - 1];
+  }
+
+  ctx.strokeStyle = '#1e1e26';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, midY);
+  ctx.lineTo(W, midY);
+  ctx.stroke();
+
+  if (span < MS.d * 14) {
+    let t = Math.floor(visStart / MS.d) * MS.d;
+    while (t < visEnd) {
+      const ds = new Date(t);
+      const x0 = msToScreen(t), x6 = msToScreen(t + 6*MS.h);
+      const x22 = msToScreen(t + 22*MS.h), x24 = msToScreen(t + MS.d);
+      ctx.fillStyle = 'rgba(0,0,180,0.04)';
+      if (x0 < W && x6 > 0) ctx.fillRect(Math.max(0,x0),0,Math.min(W,x6)-Math.max(0,x0),H);
+      if (x22 < W && x24 > 0) ctx.fillRect(Math.max(0,x22),0,Math.min(W,x24)-Math.max(0,x22),H);
+      const lx = msToScreen(t + MS.d/2);
+      if (lx > 0 && lx < W) {
+        ctx.fillStyle = '#1e1e2a';
+        ctx.font = '10px "JetBrains Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
+      }
+      t += MS.d;
+    }
+  }
+
+  const tick = pickTick(span);
+  let t = Math.floor(visStart / tick.ms) * tick.ms;
+  while (t <= visEnd + tick.ms) {
+    const x = msToScreen(t);
+    if (x >= -10 && x <= W + 10) {
+      ctx.strokeStyle = '#252530';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, midY - 20);
+      ctx.lineTo(x, midY + 20);
+      ctx.stroke();
+      ctx.fillStyle = '#404050';
+      ctx.font = '10px "JetBrains Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText(tick.fmt(t), x, midY + 34);
+    }
+    t += tick.ms;
+  }
+}
+
+function renderNowLine() {
+  nowLine.style.left = msToScreen(Date.now()) + 'px';
+}
+
+function renderTasks() {
+  tasksLayer.innerHTML = '';
+  const W = canvas.width;
+  const pxPerMs = W / S.zoom;
+
+  S.db.forEach((task, i) => {
+    const x = msToScreen(task.start);
+    const wPx = Math.max(task.dur * pxPerMs, 4);
+    if (x + wPx < -20 || x > W + 20) return;
+
+    const el = document.createElement('div');
+    el.className = 'task';
+    if (i === S.focusIdx) el.classList.add('focused');
+    if (task.done) el.classList.add('done');
+    if (S.editingId === task.id) el.classList.add('editing-mode');
+    if (S.compactMode) el.classList.add('task-compact');
+
+    const h = S.compactMode ? 28 : (S.editingId === task.id ? 80 : 48);
+    el.style.cssText = `left:${x}px;width:${Math.max(wPx,2)}px;height:${h}px`;
+    const hue = (String(task.id).split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 37) % 360;
+    el.style.borderLeftColor = `hsl(${hue},60%,50%)`;
+    el.style.borderLeftWidth = '2px';
+
+    const inner = document.createElement('div');
+    inner.className = 'task-inner' + (S.editingId === task.id ? ' task-full' : '');
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'task-title';
+    titleEl.textContent = task.tytul || task.title || '';
+    inner.appendChild(titleEl);
+
+    if (!S.compactMode) {
+      const tEl = document.createElement('div');
+      tEl.className = 'task-time';
+      tEl.textContent = `${formatTime(task.start,'HH:MM')}–${formatTime(task.start+task.dur,'HH:MM')} · ${formatDur(task.dur)}`;
+      inner.appendChild(tEl);
+    }
+
+    if (S.editingId === task.id && (task.komentarz || task.note)) {
+      const nEl = document.createElement('div');
+      nEl.className = 'task-note';
+      nEl.textContent = task.komentarz || task.note || '';
+      inner.appendChild(nEl);
+    }
+
+    const client = task.id_klienta || task.client || '';
+    const group = Array.isArray(task.grupa) ? task.grupa.join(' ') : (task.group || '');
+    if (!S.compactMode && (client || group)) {
+      const mEl = document.createElement('div');
+      mEl.className = 'task-meta';
+      mEl.textContent = [client ? `@${client}` : '', group ? `#${group}` : ''].filter(Boolean).join(' ');
+      inner.appendChild(mEl);
+    }
+
+    el.appendChild(inner);
+
+    if (group && !S.compactMode) {
+      const gp = document.createElement('div');
+      gp.className = 'task-group-pill';
+      gp.textContent = `#${group}`;
+      el.appendChild(gp);
+    }
+
+    el.dataset.idx = i;
+    tasksLayer.appendChild(el);
+  });
+}
+
+function render() {
+  drawAxis();
+  renderNowLine();
+  renderTasks();
+  updateStats();
+}
+
+function updateStats() {
+  const total = S.db.length;
+  const done = S.db.filter(t => t.done || t.wykonano).length;
+  $('st-total').textContent = total;
+  $('st-active').textContent = total - done;
+  $('st-done').textContent = done;
+  $('st-focus').textContent = S.focusIdx >= 0 && S.db[S.focusIdx] ? (S.db[S.focusIdx].tytul || S.db[S.focusIdx].title || '—') : '—';
+  $('st-pan').textContent = Math.round(S.pan / 60000) + 'm';
+  $('st-zoom').textContent = (S.zoom / MS.h).toFixed(2) + 'h';
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  $('st-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function parseCommand(raw) {
+  const str = raw.trim();
+  if (!str) return null;
+  const task = {
+    id: String(S.nextId++),
+    tytul: '', komentarz: '', id_klienta: '', grupa: [],
+    start: 0, dur: MS.h, done: false, wykonano: 0,
+    poczatek_realizacji: null, koniec_realizacji: null,
+    pliki: [], linked: [], parent: null, child: [],
+  };
+  let s = str;
+  const titleM = s.match(/^'([^']+)'/);
+  if (titleM) { task.tytul = titleM[1]; s = s.slice(titleM[0].length).trim(); }
+  else {
+    const fw = s.split(/\s+--|\s+@|\s+#|\s+"|\s+\d/)[0];
+    task.tytul = fw;
+    s = s.slice(fw.length).trim();
+  }
+  const noteM = s.match(/--([^-]+)--/);
+  if (noteM) { task.komentarz = noteM[1].trim(); s = s.replace(noteM[0],'').trim(); }
+  const clientM = s.match(/@(\S+)/);
+  if (clientM) { task.id_klienta = clientM[1]; s = s.replace(clientM[0],'').trim(); }
+  const groupM = s.match(/#(\S+)/);
+  if (groupM) { task.grupa = [groupM[1]]; s = s.replace(groupM[0],'').trim(); }
+  const rangeM = s.match(/"(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})"/);
+  if (rangeM) {
+    const now = new Date();
+    const st = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[1], +rangeM[2], 0);
+    const en = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[3], +rangeM[4], 0);
+    task.start = st.getTime();
+    task.dur = Math.max(MS.h, en - st);
+  } else {
+    const durM = s.match(/"(\d+(?:\.\d+)?)(h|m|min)?"/);
+    if (durM) {
+      const v = parseFloat(durM[1]);
+      task.dur = durM[2] === 'h' ? v * MS.h : v * 60000;
+    }
+    const lastEnd = S.db.reduce((mx, t) => Math.max(mx, t.start + t.dur), Date.now());
+    task.start = lastEnd;
+  }
+  task.poczatek_realizacji = new Date(task.start).toISOString();
+  task.koniec_realizacji = new Date(task.start + task.dur).toISOString();
+  if (!task.tytul) task.tytul = 'Zadanie ' + task.id;
+  return task;
+}
+
+let consoleMode = false;
+let editingTask = null;
+
+function openConsole(prefill) {
+  consoleMode = true;
+  S.consoleMode = true;
+  cmdInput.readOnly = false;
+  cmdInput.value = prefill || '';
+  cmdInput.placeholder = "'Tytuł' --notatka-- @klient #grupa \"2h\" | , — zapisz | Esc — anuluj";
+  cmdInput.classList.remove('editing');
+  cmdInput.focus();
+  $('cmd-hint').textContent = editingTask ? 'EDYCJA' : 'NOWE';
+}
+
+function closeConsole(save) {
+  if (save && cmdInput.value.trim()) {
+    if (editingTask) {
+      const t = parseCommand(cmdInput.value);
+      if (t) {
+        const idx = S.db.findIndex(x => x.id === editingTask.id);
+        if (idx >= 0) {
+          saveHistory();
+          t.id = editingTask.id;
+          t.start = editingTask.start;
+          t.dur = editingTask.dur;
+          t.done = editingTask.done;
+          t.wykonano = editingTask.wykonano;
+          t.poczatek_realizacji = new Date(t.start).toISOString();
+          t.koniec_realizacji = new Date(t.start + t.dur).toISOString();
+          S.db[idx] = t;
+          S.editingId = null;
+          editingTask = null;
+        }
+      }
+    } else {
+      const t = parseCommand(cmdInput.value);
+      if (t) { saveHistory(); S.db.push(t); }
+    }
+  } else if (!save) {
+    S.editingId = null;
+    editingTask = null;
+  }
+  consoleMode = false;
+  S.consoleMode = false;
+  cmdInput.readOnly = true;
+  cmdInput.value = '';
+  cmdInput.placeholder = '. — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano';
+  cmdInput.classList.remove('editing');
+  $('cmd-hint').textContent = '';
+  render();
+}
+
+cmdInput.addEventListener('keydown', e => {
+  if (!consoleMode) return;
+  if (e.key === 'Enter') { e.preventDefault(); closeConsole(true); }
+  if (e.key === 'Escape') { e.preventDefault(); closeConsole(false); }
+  if (e.key === ',') { e.preventDefault(); closeConsole(true); }
+});
+
+let panning = false, panStartX = 0, panStartPan = 0;
+let taskDragging = false, dragTaskIdx = -1, dragStartX = 0, dragStartMs = 0, dragPreSnap = 0;
+let wasDragging = false;
+
+function isMovable() { return $('movable-chk').checked; }
+
+function pushTasksAfter(movedIdx, newStart) {
+  if (!isMovable()) return;
+  const moved = S.db[movedIdx];
+  const movedEnd = newStart + moved.dur;
+  for (let i = 0; i < S.db.length; i++) {
+    if (i === movedIdx) continue;
+    const t = S.db[i];
+    if (t.start < movedEnd && t.start + t.dur > newStart) {
+      t.start += movedEnd - t.start;
+      pushTasksAfter(i, t.start);
+    }
+  }
+}
+
+tasksLayer.addEventListener('mousedown', e => {
+  if (consoleMode) return;
+  const el = e.target.closest('.task');
+  if (!el || el.dataset.idx === undefined) return;
+  e.stopPropagation();
+  const idx = +el.dataset.idx;
+  S.focusIdx = idx;
+  taskDragging = true;
+  wasDragging = false;
+  dragTaskIdx = idx;
+  dragStartX = e.clientX;
+  dragStartMs = S.db[idx].start;
+  dragPreSnap = S.db[idx].start;
+  tlEl.style.cursor = 'grabbing';
+  render();
+});
+
+tlEl.addEventListener('mousedown', e => {
+  if (consoleMode) return;
+  if (e.target !== tlEl && e.target !== canvas) return;
+  panning = true;
+  panStartX = e.clientX;
+  panStartPan = S.pan;
+  tlEl.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', e => {
+  if (S.holding.s) {
+    const rect = tlEl.getBoundingClientRect();
+    const ms = screenToMs(e.clientX - rect.left);
+    const found = S.db.find(t => ms >= t.start && ms <= t.start + t.dur);
+    hoverLabel.textContent = found ? (found.tytul || found.title || '') : '';
+    hoverLabel.style.display = found ? 'block' : 'none';
+  }
+  if (taskDragging && dragTaskIdx >= 0) {
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) > 3) wasDragging = true;
+    if (wasDragging) {
+      const rawMs = dragStartMs + dx / (canvas.width / S.zoom);
+      const snapped = applySnap(rawMs);
+      if (snapped !== dragPreSnap) {
+        S.db = JSON.parse(JSON.stringify(S.db));
+        S.db[dragTaskIdx].start = snapped;
+        pushTasksAfter(dragTaskIdx, snapped);
+        dragPreSnap = snapped;
+        render();
+      }
+    }
+    return;
+  }
+  if (panning) {
+    const dx = e.clientX - panStartX;
+    S.pan = applySnap(panStartPan - dx / (canvas.width / S.zoom));
+    render();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if (taskDragging) {
+    taskDragging = false;
+    if (wasDragging && dragTaskIdx >= 0) saveHistory();
+    dragTaskIdx = -1;
+    wasDragging = false;
+    tlEl.style.cursor = 'default';
+    render();
+    return;
+  }
+  if (panning) { panning = false; tlEl.style.cursor = 'default'; }
+});
+
+tasksLayer.addEventListener('click', e => {
+  if (wasDragging) return;
+  const el = e.target.closest('.task');
+  S.focusIdx = el && el.dataset.idx !== undefined ? +el.dataset.idx : -1;
+  render();
+});
+
+tlEl.addEventListener('click', e => {
+  if (wasDragging) return;
+  if (e.target === tlEl || e.target === canvas) { S.focusIdx = -1; render(); }
+});
+
+let wheelAccum = 0, wheelTimer = null;
+
+tlEl.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (consoleMode) return;
+  const dy = e.deltaY;
+
+  if (S.holding.q) {
+    wheelAccum += dy; clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => {
+      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
+      if (!S.db.length) return;
+      S.focusIdx = Math.max(0, Math.min(S.db.length-1, (S.focusIdx < 0 ? 0 : S.focusIdx) + dir));
+      render();
+    }, 60);
+    return;
+  }
+  if (S.holding.a) {
+    wheelAccum += dy; clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => {
+      if (S.focusIdx < 0 || !S.db[S.focusIdx]) { wheelAccum=0; return; }
+      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
+      saveHistory();
+      S.db[S.focusIdx].start = applySnap(S.db[S.focusIdx].start + dir * snapMs());
+      pushTasksAfter(S.focusIdx, S.db[S.focusIdx].start);
+      render();
+    }, 40);
+    return;
+  }
+  if (S.holding.z) {
+    wheelAccum += dy; clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => {
+      if (S.focusIdx < 0 || !S.db[S.focusIdx]) { wheelAccum=0; return; }
+      const dir = wheelAccum > 0 ? 1 : -1; wheelAccum = 0;
+      const step = snapMs();
+      saveHistory();
+      S.db[S.focusIdx].dur = Math.max(step, applySnap(S.db[S.focusIdx].dur + dir * step));
+      render();
+    }, 40);
+    return;
+  }
+
+  wheelAccum += dy; clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(() => {
+    const td = wheelAccum; wheelAccum = 0;
+    const sign = td > 0 ? 1 : -1;
+    const factor = 1 + sign * Math.min(Math.abs(td), 300) * 0.0008;
+    S.zoom = Math.max(MS.h * 0.5, Math.min(MS.y * 5, S.zoom * factor));
+    render();
+  }, 16);
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName.toLowerCase();
+  if (tag === 'input') {
+    if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+    if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); }
+    return;
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
+  if (e.key==='.') { e.preventDefault(); openConsole(); return; }
+  if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
+  if (e.key==='q'||e.key==='Q') S.holding.q=true;
+  if (e.key==='a'||e.key==='A') S.holding.a=true;
+  if (e.key==='z'||e.key==='Z') S.holding.z=true;
+  if (e.key==='s'||e.key==='S') S.holding.s=true;
+  if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
+  if (e.key==='t'||e.key==='T') { S.pan=0; render(); return; }
+  if (e.key==='c'||e.key==='C') {
+    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+      const t=S.db[S.focusIdx]; S.pan=(t.start+t.dur/2)-Date.now();
+    }
+    render(); return;
+  }
+  if (e.key==='w'||e.key==='W') { S.compactMode=!S.compactMode; render(); return; }
+  if (e.key===' ') {
+    e.preventDefault();
+    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+      saveHistory();
+      S.db[S.focusIdx].done=!S.db[S.focusIdx].done;
+      S.db[S.focusIdx].wykonano=S.db[S.focusIdx].done?1:0;
+      render();
+    }
+    return;
+  }
+  if (e.key==='Delete'||e.key==='Backspace') {
+    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+      saveHistory();
+      S.db.splice(S.focusIdx,1);
+      S.focusIdx=Math.min(S.focusIdx,S.db.length-1);
+      S.editingId=null; editingTask=null; render();
+    }
+    return;
+  }
+  if (e.key==='e'||e.key==='E') {
+    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+      editingTask=S.db[S.focusIdx];
+      S.editingId=editingTask.id;
+      const t=editingTask;
+      let cmd=`'${t.tytul||t.title||''}'`;
+      if (t.komentarz||t.note) cmd+=` --(${t.komentarz||t.note})--`;
+      if (t.id_klienta||t.client) cmd+=` @${t.id_klienta||t.client}`;
+      if (t.grupa&&t.grupa.length) cmd+=` #${t.grupa[0]}`;
+      else if (t.group) cmd+=` #${t.group}`;
+      cmd+=` "${formatDur(t.dur)}"`;
+      openConsole(cmd);
+      cmdInput.classList.add('editing');
+    }
+    return;
+  }
+});
+
+window.addEventListener('keyup', e => {
+  if (e.key==='q'||e.key==='Q') S.holding.q=false;
+  if (e.key==='a'||e.key==='A') S.holding.a=false;
+  if (e.key==='z'||e.key==='Z') S.holding.z=false;
+  if (e.key==='s'||e.key==='S') { S.holding.s=false; hoverLabel.style.display='none'; }
+});
+
+async function boot(url, password) {
+  $('auth-err').textContent = '';
+  $('auth-status').textContent = 'Derywacja klucza…';
+  workerUrl = url.replace(/\/$/, '');
+  try {
+    cryptoKey = await deriveKey(password, 'chronos-salt-v1');
+  } catch (e) {
+    $('auth-err').textContent = 'Błąd derywacji klucza.';
+    $('auth-status').textContent = '';
+    return;
+  }
+  $('auth-status').textContent = 'Pobieranie danych z chmury…';
+  try {
+    const cipher = await cloudGet();
+    if (cipher) {
+      try {
+        const plain = await decryptData(cryptoKey, cipher);
+        const parsed = JSON.parse(plain);
+        if (Array.isArray(parsed)) {
+          S.db = parsed;
+          const maxId = S.db.reduce((m, t) => {
+            const n = parseInt(t.id, 10);
+            return isNaN(n) ? m : Math.max(m, n);
+          }, 0);
+          S.nextId = maxId + 1;
+        }
+      } catch (_) {
+        $('auth-err').textContent = 'Błąd deszyfrowania — złe hasło lub uszkodzone dane.';
+        $('auth-status').textContent = '';
+        cryptoKey = null;
+        return;
+      }
+    }
+  } catch (e) {
+    $('auth-err').textContent = 'Błąd połączenia z Worker: ' + e.message;
+    $('auth-status').textContent = '';
+    cryptoKey = null;
+    return;
+  }
+
+  $('auth').style.display = 'none';
+  $('app').style.display = 'flex';
+
+  S.zoom = ZOOM_PRESETS[1];
+  if (S.db.length === 0) {
+    const now = Date.now();
+    S.db = [
+      { id: String(S.nextId++), tytul: 'Pierwsze zadanie', komentarz: 'Skonfiguruj swój projekt', id_klienta: '', grupa: ['start'], start: now + 10*60000, dur: MS.h, done: false, wykonano: 0, poczatek_realizacji: new Date(now+10*60000).toISOString(), koniec_realizacji: new Date(now+10*60000+MS.h).toISOString(), pliki: [], linked: [], parent: null, child: [] },
+    ];
+  }
+  S.focusIdx = 0;
+
+  saveHistory();
+  setInterval(render, 1000);
+  window.addEventListener('resize', resize);
+  resize();
+}
+
+$('auth-btn').addEventListener('click', () => {
+  const url = $('auth-url').value.trim();
+  const pass = $('auth-pass').value;
+  if (!url) { $('auth-err').textContent = 'Podaj URL Workera.'; return; }
+  if (!pass) { $('auth-err').textContent = 'Podaj hasło.'; return; }
+  boot(url, pass);
+});
+
+$('auth-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('auth-btn').click();
+});
+</script>
+</body>
+</html>
