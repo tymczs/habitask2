@@ -182,7 +182,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   </div>
 </div>
 
-
 <script>
 const MS = { h: 3600000, d: 86400000, w: 604800000, mo: 2592000000, y: 31536000000 };
 const ZOOM_PRESETS = [MS.h * 2, MS.d * 1.5, MS.w, MS.mo, MS.y * 1.2];
@@ -366,23 +365,28 @@ function formatDur(ms) {
   return rm ? `${h}h${rm}m` : `${h}h`;
 }
 
-
 function drawAxis() {
   const W = canvas.width, H = canvas.height;
   ctx.fillStyle = '#0a0a0c';
   ctx.fillRect(0, 0, W, H);
 
   const now = Date.now();
+  const nowDate = new Date(now);
+  const y = nowDate.getFullYear();
+  const m = nowDate.getMonth();
+  const d = nowDate.getDate();
+  const dayOfWeek = nowDate.getDay() || 7;
+
   const bands = [
-    { span: MS.y, c: 'rgba(255, 255, 255, 0.01)' },
-    { span: MS.mo, c: 'rgba(255, 255, 255, 0.015)' },
-    { span: MS.w, c: 'rgba(255, 255, 255, 0.02)' },
-    { span: 9 * MS.h, c: 'rgba(255, 255, 255, 0.025)' },
-    { span: 3 * MS.h, c: 'rgba(255, 255, 255, 0.03)' }
+    { s: new Date(y, 0, 1).getTime(), e: new Date(y, 11, 31, 23, 59, 59, 999).getTime(), c: '#111114' },
+    { s: new Date(y, m, 1).getTime(), e: new Date(y, m + 1, 0, 23, 59, 59, 999).getTime(), c: '#16161a' },
+    { s: new Date(y, m, d - dayOfWeek + 1).getTime(), e: new Date(y, m, d + (7 - dayOfWeek), 23, 59, 59, 999).getTime(), c: '#1a1c23' },
+    { s: new Date(y, m, d).getTime(), e: new Date(y, m, d, 23, 59, 59, 999).getTime(), c: '#1f222b' },
+    { s: now - 10800000, e: now + 10800000, c: '#262a35' }
   ];
-  
+
   bands.forEach(b => {
-    const x1 = msToScreen(now - b.span), x2 = msToScreen(now + b.span);
+    const x1 = msToScreen(b.s), x2 = msToScreen(b.e);
     if (x1 < W && x2 > 0) {
       ctx.fillStyle = b.c;
       ctx.fillRect(Math.max(0, x1), 0, Math.min(W, x2) - Math.max(0, x1), H);
@@ -391,37 +395,8 @@ function drawAxis() {
 
   const visStart = screenToMs(0);
   const visEnd = screenToMs(W);
-  const span = visEnd - visStart;
   const midY = H / 2;
   const MONTHS = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
-
-  function pickTick(span) {
-    const units = [
-      { ms: 60000, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: 300000, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: 900000, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: 1800000, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: MS.h, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: MS.h*3, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: MS.h*6, fmt: ms => formatTime(ms,'HH:MM') },
-      { ms: MS.h*12, fmt: ms => formatTime(ms,'D HH:MM') },
-      { ms: MS.d, fmt: ms => formatTime(ms,'D Mon') },
-      { ms: MS.d*3, fmt: ms => formatTime(ms,'D Mon') },
-      { ms: MS.w, fmt: ms => formatTime(ms,'D Mon') },
-      { ms: MS.d*14, fmt: ms => formatTime(ms,'D Mon') },
-      { ms: MS.mo/4, fmt: ms => formatTime(ms,'Mon YY') },
-      { ms: MS.mo, fmt: ms => formatTime(ms,'Mon YY') },
-      { ms: MS.mo*3, fmt: ms => formatTime(ms,'Mon YY') },
-      { ms: MS.y/2, fmt: ms => formatTime(ms,'Mon YYYY') },
-      { ms: MS.y, fmt: ms => formatTime(ms,'YYYY') },
-    ];
-    const target = W / 6;
-    const pxPerMs = W / span;
-    for (let i = 0; i < units.length; i++) {
-      if (units[i].ms * pxPerMs >= target) return units[i];
-    }
-    return units[units.length - 1];
-  }
 
   ctx.strokeStyle = '#d0d0c8';
   ctx.lineWidth = 1;
@@ -430,40 +405,41 @@ function drawAxis() {
   ctx.lineTo(W, midY);
   ctx.stroke();
 
-  if (span < MS.d * 14) {
-    let t = Math.floor(visStart / MS.d) * MS.d;
-    while (t < visEnd) {
-      const ds = new Date(t);
-      const lx = msToScreen(t + MS.d/2);
-      if (lx > 0 && lx < W) {
-        ctx.fillStyle = '#d0d0c8';
-        ctx.font = '10px "JetBrains Mono"';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
-      }
-      t += MS.d;
-    }
-  }
+  let tDay = new Date(visStart);
+  tDay.setHours(0, 0, 0, 0);
 
-  const tick = pickTick(span);
-  let t = Math.floor(visStart / tick.ms) * tick.ms;
-  while (t <= visEnd + tick.ms) {
-    const x = msToScreen(t);
-    if (x >= -10 && x <= W + 10) {
-      ctx.strokeStyle = '#d0d0c8';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, midY - 20);
-      ctx.lineTo(x, midY + 20);
-      ctx.stroke();
-      ctx.fillStyle = '#d0d0c8';
+  while (tDay.getTime() <= visEnd + 86400000) {
+    const t = tDay.getTime();
+    const ds = new Date(t);
+    const lx = msToScreen(t + 43200000);
+    if (lx > 0 && lx < W) {
+      ctx.fillStyle = '#606070';
       ctx.font = '10px "JetBrains Mono"';
       ctx.textAlign = 'center';
-      ctx.fillText(tick.fmt(t), x, midY + 34);
+      ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
     }
-    t += tick.ms;
+    for (let h = 0; h < 24; h += 3) {
+      let tempD = new Date(tDay);
+      tempD.setHours(h, 0, 0, 0);
+      const tickMs = tempD.getTime();
+      const x = msToScreen(tickMs);
+      if (x >= -10 && x <= W + 10) {
+        ctx.strokeStyle = '#3a3a45';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, midY - 20);
+        ctx.lineTo(x, midY + 20);
+        ctx.stroke();
+        ctx.fillStyle = '#9090a0';
+        ctx.font = '10px "JetBrains Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillText(h.toString(), x, midY + 34);
+      }
+    }
+    tDay.setDate(tDay.getDate() + 1);
   }
 }
+
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
@@ -559,6 +535,7 @@ function renderTasks() {
     tasksLayer.appendChild(el);
   });
 }
+
 function render() {
   drawAxis();
   renderNowLine();
@@ -803,6 +780,7 @@ function resolveOverlapSnap(idx) {
     }
   }
 }
+
 tasksLayer.addEventListener('mousedown', e => {
   if (consoleMode) return;
   const el = e.target.closest('.task');
@@ -996,9 +974,9 @@ window.addEventListener('keydown', e => {
   if (e.key==='a'||e.key==='A') S.holding.a = true;
   if (e.key==='z'||e.key==='Z') S.holding.z = true;
 
-    if (e.key==='m'||e.key==='M') { e.preventDefault(); $('movable-chk').checked = !$('movable-chk').checked; return; }
-    if (e.key==='n'||e.key==='N') { e.preventDefault(); S.sToggle = !S.sToggle; $('name-chk').checked = S.sToggle; if (!S.sToggle) hoverLabel.style.display = 'none'; return; }
-    if (e.key==='d'||e.key==='D') { e.preventDefault(); S.showDone = !S.showDone; $('done-chk').checked = S.showDone; render(); return; }
+  if (e.key==='m'||e.key==='M') { e.preventDefault(); $('movable-chk').checked = !$('movable-chk').checked; return; }
+  if (e.key==='n'||e.key==='N') { e.preventDefault(); S.sToggle = !S.sToggle; $('name-chk').checked = S.sToggle; if (!S.sToggle) hoverLabel.style.display = 'none'; return; }
+  if (e.key==='d'||e.key==='D') { e.preventDefault(); S.showDone = !S.showDone; $('done-chk').checked = S.showDone; render(); return; }
 
   if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
   if (e.key==='t'||e.key==='T') { S.pan=0; render(); return; }
