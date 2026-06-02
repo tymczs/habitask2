@@ -186,6 +186,7 @@ const S = {
   consoleMode: false,
   editingId: null,
   sToggle: false,
+  showDone: true,
   holding: { q: false, a: false, z: false },
   db: [],
   nextId: 1,
@@ -452,6 +453,12 @@ function renderTasks() {
   const pxPerMs = W / S.zoom;
 
   S.db.forEach((task, i) => {
+    let diff = 0;
+    if (task.done) {
+      diff = Date.now() - (task.start + task.dur);
+      if (!S.showDone && diff >= 43200000) return;
+    }
+
     const x = msToScreen(task.start);
     const wPx = Math.max(task.dur * pxPerMs, 4);
     if (x + wPx < -20 || x > W + 20) return;
@@ -459,12 +466,23 @@ function renderTasks() {
     const el = document.createElement('div');
     el.className = 'task';
     if (i === S.focusIdx) el.classList.add('focused');
-    if (task.done) el.classList.add('done');
+    
+    if (task.done) {
+      el.classList.add('done');
+      if (S.showDone || diff <= 0) {
+        el.style.opacity = '0.6';
+      } else {
+        el.style.opacity = String((0.6 * (1 - (diff / 43200000))).toFixed(3));
+      }
+    }
+    
     if (S.editingId === task.id) el.classList.add('editing-mode');
     if (S.compactMode) el.classList.add('task-compact');
 
     const h = S.compactMode ? 28 : (S.editingId === task.id ? 480 : 300);
-    el.style.cssText = `left:${x}px;width:${Math.max(wPx,2)}px;height:${h}px`;
+    el.style.left = `${x}px`;
+    el.style.width = `${Math.max(wPx, 2)}px`;
+    el.style.height = `${h}px`;
     const hue = (String(task.id).split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 37) % 360;
     el.style.borderLeftColor = `hsl(${hue},60%,50%)`;
     el.style.borderLeftWidth = '2px';
@@ -520,7 +538,6 @@ function renderTasks() {
     tasksLayer.appendChild(el);
   });
 }
-
 function render() {
   drawAxis();
   renderNowLine();
@@ -972,6 +989,7 @@ window.addEventListener('keydown', e => {
     render(); return;
   }
   if (e.key==='w'||e.key==='W') { S.compactMode=!S.compactMode; render(); return; }
+  if (e.key==='d'||e.key==='D') { S.showDone=!S.showDone; render(); return; }
 
   if (e.key===' ') {
     e.preventDefault();
