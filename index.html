@@ -395,8 +395,37 @@ function drawAxis() {
 
   const visStart = screenToMs(0);
   const visEnd = screenToMs(W);
+  const span = visEnd - visStart;
   const midY = H / 2;
   const MONTHS = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  const DAYS = ['Ndz','Pon','Wto','Śro','Czw','Pią','Sob'];
+
+  function pickTick(span) {
+    const units = [
+      { ms: 300000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: 900000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: 1800000, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*3, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*6, fmt: ms => formatTime(ms,'HH:MM') },
+      { ms: MS.h*12, fmt: ms => formatTime(ms,'D HH:MM') },
+      { ms: MS.d, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.d*3, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.w, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.d*14, fmt: ms => formatTime(ms,'D Mon') },
+      { ms: MS.mo/4, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.mo, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.mo*3, fmt: ms => formatTime(ms,'Mon YY') },
+      { ms: MS.y/2, fmt: ms => formatTime(ms,'Mon YYYY') },
+      { ms: MS.y, fmt: ms => formatTime(ms,'YYYY') },
+    ];
+    const target = W / 6;
+    const pxPerMs = W / span;
+    for (let i = 0; i < units.length; i++) {
+      if (units[i].ms * pxPerMs >= target) return units[i];
+    }
+    return units[units.length - 1];
+  }
 
   ctx.strokeStyle = '#d0d0c8';
   ctx.lineWidth = 1;
@@ -405,41 +434,65 @@ function drawAxis() {
   ctx.lineTo(W, midY);
   ctx.stroke();
 
-  let tDay = new Date(visStart);
-  tDay.setHours(0, 0, 0, 0);
-
-  while (tDay.getTime() <= visEnd + 86400000) {
-    const t = tDay.getTime();
-    const ds = new Date(t);
-    const lx = msToScreen(t + 43200000);
-    if (lx > 0 && lx < W) {
-      ctx.fillStyle = '#606070';
-      ctx.font = '10px "JetBrains Mono"';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
-    }
-    for (let h = 0; h < 24; h += 3) {
-      let tempD = new Date(tDay);
-      tempD.setHours(h, 0, 0, 0);
-      const tickMs = tempD.getTime();
-      const x = msToScreen(tickMs);
-      if (x >= -10 && x <= W + 10) {
-        ctx.strokeStyle = '#3a3a45';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x, midY - 20);
-        ctx.lineTo(x, midY + 20);
-        ctx.stroke();
-        ctx.fillStyle = '#9090a0';
+  if (span < MS.d * 14) {
+    let t = Math.floor(visStart / MS.d) * MS.d;
+    while (t < visEnd) {
+      const ds = new Date(t);
+      const lx = msToScreen(t + MS.d/2);
+      if (lx > 0 && lx < W) {
+        ctx.fillStyle = '#d0d0c8';
         ctx.font = '10px "JetBrains Mono"';
         ctx.textAlign = 'center';
-        ctx.fillText(h.toString(), x, midY + 34);
+        ctx.fillText(`${ds.getDate()} ${MONTHS[ds.getMonth()]}`, lx, midY - 30);
+        ctx.fillStyle = '#606070';
+        ctx.fillText(DAYS[ds.getDay()], lx, midY - 18);
+      }
+      t += MS.d;
+    }
+  }
+
+  const tick = pickTick(span);
+  let startDate = new Date(visStart);
+  
+  if (tick.ms >= MS.mo) {
+    startDate.setDate(1); startDate.setHours(0,0,0,0);
+  } else if (tick.ms >= MS.d) {
+    startDate.setHours(0,0,0,0);
+  } else if (tick.ms >= MS.h) {
+    startDate.setMinutes(0,0,0);
+    let stepH = Math.round(tick.ms / MS.h);
+    startDate.setHours(Math.floor(startDate.getHours() / stepH) * stepH);
+  } else {
+    startDate.setSeconds(0,0);
+    let stepM = Math.round(tick.ms / 60000);
+    startDate.setMinutes(Math.floor(startDate.getMinutes() / stepM) * stepM);
+  }
+  
+  let t = startDate.getTime();
+
+  while (t <= visEnd + tick.ms) {
+    const x = msToScreen(t);
+    if (x >= -10 && x <= W + 10) {
+      ctx.strokeStyle = '#3a3a45';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, midY - 20);
+      ctx.lineTo(x, midY + 20);
+      ctx.stroke();
+      ctx.fillStyle = '#9090a0';
+      ctx.font = '10px "JetBrains Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText(tick.fmt(t), x, midY + 34);
+
+      if (tick.ms >= MS.d && tick.ms < MS.mo) {
+        const ds = new Date(t);
+        ctx.fillStyle = '#606070';
+        ctx.fillText(DAYS[ds.getDay()], x, midY + 48);
       }
     }
-    tDay.setDate(tDay.getDate() + 1);
+    t += tick.ms;
   }
 }
-
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
