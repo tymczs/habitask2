@@ -198,6 +198,7 @@ const S = {
   showDone: true,
   holding: { q: false, a: false, z: false },
   db: [],
+  groups: {},
   nextId: 1,
   currentFile: 'timeline-db.enc'
 };
@@ -538,8 +539,22 @@ function renderTasks() {
     el.style.left = `${x}px`;
     el.style.width = `${Math.max(wPx, 2)}px`;
     el.style.height = `${h}px`;
-    const hue = (String(task.id).split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 37) % 360;
-    el.style.borderLeftColor = `hsl(${hue},60%,50%)`;
+
+    const group = Array.isArray(task.grupa) ? task.grupa.join(' ') : (task.group || '');
+    let borderColor = '';
+
+    if (group) {
+      if (!S.groups[group]) {
+        const hue = Math.floor(Math.random() * 360);
+        S.groups[group] = `hsl(${hue},60%,50%)`;
+      }
+      borderColor = S.groups[group];
+    } else {
+      const hue = (String(task.id).split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 37) % 360;
+      borderColor = `hsl(${hue},60%,50%)`;
+    }
+
+    el.style.borderLeftColor = borderColor;
     el.style.borderLeftWidth = '2px';
 
     const inner = document.createElement('div');
@@ -551,7 +566,6 @@ function renderTasks() {
     inner.appendChild(titleEl);
 
     const client = task.id_klienta || task.client || '';
-    const group = Array.isArray(task.grupa) ? task.grupa.join(' ') : (task.group || '');
     
     if (!S.compactMode) {
       if (client) {
@@ -564,7 +578,7 @@ function renderTasks() {
       if (group) {
         const gEl = document.createElement('div');
         gEl.className = 'task-meta';
-        gEl.style.color = '#c5ff6b';
+        gEl.style.color = borderColor;
         gEl.textContent = `#${group}`;
         inner.appendChild(gEl);
       }
@@ -579,8 +593,6 @@ function renderTasks() {
       inner.appendChild(nEl);
     }
 
-    el.appendChild(inner);
-
     if (group && !S.compactMode) {
       const gp = document.createElement('div');
       gp.className = 'task-group-pill';
@@ -592,7 +604,6 @@ function renderTasks() {
     tasksLayer.appendChild(el);
   });
 }
-
 function render() {
   drawAxis();
   renderNowLine();
@@ -899,7 +910,10 @@ window.addEventListener('mousemove', e => {
     const el = e.target.closest('.task');
     if (el && el.dataset.idx !== undefined) {
       const t = S.db[el.dataset.idx];
-      hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${t.komentarz || t.note || ''}</div>`;
+      const st = formatTime(t.start, 'HH:MM');
+      const en = formatTime(t.start + t.dur, 'HH:MM');
+      const d = formatDur(t.dur);
+      hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${st} - ${en} (${d})<br>${t.komentarz || t.note || ''}</div>`;
       hoverLabel.style.display = 'block';
       hoverLabel.style.left = (e.clientX + 15) + 'px';
       hoverLabel.style.top = (e.clientY + 15) + 'px';
@@ -908,7 +922,6 @@ window.addEventListener('mousemove', e => {
     }
   }
 });
-
 
 tasksLayer.addEventListener('click', e => {
   if (wasDragging) return;
