@@ -726,6 +726,7 @@ function pushRight(movedIdx, depth) {
   for (let i = 0; i < S.db.length; i++) {
     if (i === movedIdx) continue;
     const o = S.db[i];
+    if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
     if (o.start < myEnd && o.start + o.dur > t.start) {
       const newStart = myEnd;
       if (newStart !== o.start) {
@@ -744,6 +745,7 @@ function pushLeft(movedIdx, depth) {
   for (let i = 0; i < S.db.length; i++) {
     if (i === movedIdx) continue;
     const o = S.db[i];
+    if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
     if (o.start < t.start + t.dur && o.start + o.dur > myStart) {
       const newStart = myStart - o.dur;
       if (newStart !== o.start) {
@@ -765,6 +767,7 @@ function resolveOverlapSnap(idx) {
     for (let i = 0; i < S.db.length; i++) {
       if (i === idx) continue;
       const o = S.db[i];
+      if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
       if (t.start < o.start + o.dur && t.start + t.dur > o.start) {
         const overlapL = (o.start + o.dur) - t.start;
         const overlapR = (t.start + t.dur) - o.start;
@@ -779,7 +782,6 @@ function resolveOverlapSnap(idx) {
     }
   }
 }
-
 tasksLayer.addEventListener('mousedown', e => {
   if (consoleMode) return;
   const el = e.target.closest('.task');
