@@ -498,59 +498,6 @@ function drawAxis() {
   }
 }
 
-window.addEventListener('mousemove', e => {
-  if (S.sToggle) {
-    const rect = tlEl.getBoundingClientRect();
-    const ms = screenToMs(e.clientX - rect.left);
-    const found = S.db.find(t => ms >= t.start && ms <= t.start + t.dur);
-    if (found) {
-      const tytul = found.tytul || found.title || '';
-      const czas = `${formatTime(found.start,'D Mon HH:MM')} - ${formatTime(found.start+found.dur,'HH:MM')}`;
-      const klient = found.id_klienta || found.client ? `@${found.id_klienta || found.client}` : '';
-      const gr = Array.isArray(found.grupa) ? found.grupa.join(' ') : (found.group || '');
-      const grupa = gr ? `#${gr}` : '';
-      const notatka = found.komentarz || found.note || '';
-      const real = found.dur_real ? `⏱ ${formatDur(found.dur_real)}` : '';
-      
-      let detale = `${czas} | ⏳ ${formatDur(found.dur)} ${real}`;
-      if (klient || grupa) detale += `\n${klient} ${grupa}`.trim();
-      if (notatka) detale += `\n${notatka}`;
-      
-      hoverLabel.innerHTML = `<div class="hl-title">${tytul}</div><div class="hl-details">${detale}</div>`;
-      hoverLabel.style.display = 'block';
-      hoverLabel.style.left = (e.clientX + 16) + 'px';
-      hoverLabel.style.top = (e.clientY - 30) + 'px';
-    } else {
-      hoverLabel.style.display = 'none';
-    }
-  }
-  if (taskDragging && dragTaskIdx >= 0) {
-    const dx = e.clientX - dragStartX;
-    if (Math.abs(dx) > 3) wasDragging = true;
-    if (wasDragging) {
-      const rawMs = dragStartMs + dx / (canvas.width / S.zoom);
-      const snapped = applySnap(rawMs);
-      if (snapped !== dragPreSnap) {
-        S.db = JSON.parse(JSON.stringify(S.db));
-        S.db[dragTaskIdx].start = snapped;
-        if (isMovable()) {
-          if (snapped > dragPreSnap) pushRight(dragTaskIdx);
-          else pushLeft(dragTaskIdx);
-        } else {
-          resolveOverlapSnap(dragTaskIdx);
-        }
-        dragPreSnap = snapped;
-        render();
-      }
-    }
-    return;
-  }
-  if (panning) {
-    const dx = e.clientX - panStartX;
-    S.pan = applySnap(panStartPan - dx / (canvas.width / S.zoom));
-    render();
-  }
-});
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
@@ -923,11 +870,23 @@ window.addEventListener('mousemove', e => {
     const rect = tlEl.getBoundingClientRect();
     const ms = screenToMs(e.clientX - rect.left);
     const found = S.db.find(t => ms >= t.start && ms <= t.start + t.dur);
-    hoverLabel.textContent = found ? (found.tytul || found.title || '') : '';
-    hoverLabel.style.display = found ? 'block' : 'none';
     if (found) {
+      const tytul = found.tytul || found.title || '';
+      const czas = `${formatTime(found.start,'D Mon HH:MM')} - ${formatTime(found.start+found.dur,'HH:MM')}`;
+      const klient = found.id_klienta || found.client ? `@${found.id_klienta || found.client}` : '';
+      const gr = Array.isArray(found.grupa) ? found.grupa.join(' ') : (found.group || '');
+      const grupa = gr ? `#${gr}` : '';
+      const notatka = found.komentarz || found.note || '';
+      const real = found.dur_real ? `⏱ ${formatDur(found.dur_real)}` : '';
+      let detale = `${czas} | ⏳ ${formatDur(found.dur)} ${real}`;
+      if (klient || grupa) detale += `\n${klient} ${grupa}`.trim();
+      if (notatka) detale += `\n${notatka}`;
+      hoverLabel.innerHTML = `<div class="hl-title">${tytul}</div><div class="hl-details">${detale}</div>`;
+      hoverLabel.style.display = 'block';
       hoverLabel.style.left = (e.clientX + 16) + 'px';
       hoverLabel.style.top = (e.clientY - 30) + 'px';
+    } else {
+      hoverLabel.style.display = 'none';
     }
   }
   if (taskDragging && dragTaskIdx >= 0) {
@@ -957,7 +916,6 @@ window.addEventListener('mousemove', e => {
     render();
   }
 });
-
 window.addEventListener('mouseup', () => {
   if (taskDragging) {
     taskDragging = false;
