@@ -75,10 +75,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #hover-label{
   position:fixed;pointer-events:none;z-index:100;display:none;
   background:var(--bg3);border:1px solid var(--accent);
-  padding:6px 13px;font-size:35px;color:var(--accent);
-  font-family:var(--font-ui);letter-spacing:0.05em;
-  border-radius:8px;
+  padding:8px 12px;border-radius:6px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.5);
 }
+.hl-title { font-size:14px; font-weight:700; color:var(--accent); font-family:var(--font-ui); letter-spacing:0.05em; }
+.hl-details { font-size:10px; color:var(--text2); margin-top:6px; font-family:var(--font-mono); line-height:1.5; white-space:pre-wrap; }
 #stats{
   flex-shrink:0;height:32px;background:var(--bg2);
   border-top:1px solid var(--border);
@@ -190,7 +191,7 @@ const S = {
   pan: 0,
   zoom: 1,
   focusIdx: -1,
-  compactMode: false,
+  compactMode: true,
   consoleMode: false,
   editingId: null,
   sToggle: false,
@@ -510,7 +511,12 @@ window.addEventListener('mousemove', e => {
       const grupa = gr ? `#${gr}` : '';
       const notatka = found.komentarz || found.note || '';
       const real = found.dur_real ? `⏱ ${formatDur(found.dur_real)}` : '';
-      hoverLabel.innerHTML = `<div>${tytul}</div><div style="font-size:9px;color:var(--text2);margin-top:5px;font-family:var(--font-mono);line-height:1.4">${czas} | ⏳ ${formatDur(found.dur)} ${real}<br>${klient} ${grupa}<br>${notatka}</div>`;
+      
+      let detale = `${czas} | ⏳ ${formatDur(found.dur)} ${real}`;
+      if (klient || grupa) detale += `\n${klient} ${grupa}`.trim();
+      if (notatka) detale += `\n${notatka}`;
+      
+      hoverLabel.innerHTML = `<div class="hl-title">${tytul}</div><div class="hl-details">${detale}</div>`;
       hoverLabel.style.display = 'block';
       hoverLabel.style.left = (e.clientX + 16) + 'px';
       hoverLabel.style.top = (e.clientY - 30) + 'px';
@@ -545,7 +551,6 @@ window.addEventListener('mousemove', e => {
     render();
   }
 });
-
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
