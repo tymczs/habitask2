@@ -378,17 +378,20 @@ function drawAxis() {
   const dayOfWeek = nowDate.getDay() || 7;
 
   const bands = [
-    { s: new Date(y, 0, 1).getTime(), e: new Date(y, 11, 31, 23, 59, 59, 999).getTime(), c: '#111114' },
-    { s: new Date(y, m, 1).getTime(), e: new Date(y, m + 1, 0, 23, 59, 59, 999).getTime(), c: '#16161a' },
-    { s: new Date(y, m, d - dayOfWeek + 1).getTime(), e: new Date(y, m, d + (7 - dayOfWeek), 23, 59, 59, 999).getTime(), c: '#1a1c23' },
-    { s: new Date(y, m, d).getTime(), e: new Date(y, m, d, 23, 59, 59, 999).getTime(), c: '#1f222b' },
-    { s: now - 10800000, e: now + 10800000, c: '#262a35' }
+    { s: new Date(y, 0, 1).getTime(), e: new Date(y, 11, 31, 23, 59, 59, 999).getTime(), c1: '#0e0a12', c2: '#0a0d14' },
+    { s: new Date(y, m, 1).getTime(), e: new Date(y, m + 1, 0, 23, 59, 59, 999).getTime(), c1: '#12101a', c2: '#0e161c' },
+    { s: new Date(y, m, d - dayOfWeek + 1).getTime(), e: new Date(y, m, d + (7 - dayOfWeek), 23, 59, 59, 999).getTime(), c1: '#181425', c2: '#121b22' },
+    { s: new Date(y, m, d).getTime(), e: new Date(y, m, d, 23, 59, 59, 999).getTime(), c1: '#1f162e', c2: '#16242b' },
+    { s: now - 10800000, e: now + 10800000, c1: '#2a1a3a', c2: '#1a2c3a' }
   ];
 
   bands.forEach(b => {
     const x1 = msToScreen(b.s), x2 = msToScreen(b.e);
     if (x1 < W && x2 > 0) {
-      ctx.fillStyle = b.c;
+      const grad = ctx.createLinearGradient(Math.max(0, x1), 0, Math.min(W, x2), H);
+      grad.addColorStop(0, b.c1);
+      grad.addColorStop(1, b.c2);
+      ctx.fillStyle = grad;
       ctx.fillRect(Math.max(0, x1), 0, Math.min(W, x2) - Math.max(0, x1), H);
     }
   });
@@ -494,6 +497,54 @@ function drawAxis() {
   }
 }
 
+window.addEventListener('mousemove', e => {
+  if (S.sToggle) {
+    const rect = tlEl.getBoundingClientRect();
+    const ms = screenToMs(e.clientX - rect.left);
+    const found = S.db.find(t => ms >= t.start && ms <= t.start + t.dur);
+    if (found) {
+      const tytul = found.tytul || found.title || '';
+      const czas = `${formatTime(found.start,'D Mon HH:MM')} - ${formatTime(found.start+found.dur,'HH:MM')}`;
+      const klient = found.id_klienta || found.client ? `@${found.id_klienta || found.client}` : '';
+      const gr = Array.isArray(found.grupa) ? found.grupa.join(' ') : (found.group || '');
+      const grupa = gr ? `#${gr}` : '';
+      const notatka = found.komentarz || found.note || '';
+      const real = found.dur_real ? `⏱ ${formatDur(found.dur_real)}` : '';
+      hoverLabel.innerHTML = `<div>${tytul}</div><div style="font-size:9px;color:var(--text2);margin-top:5px;font-family:var(--font-mono);line-height:1.4">${czas} | ⏳ ${formatDur(found.dur)} ${real}<br>${klient} ${grupa}<br>${notatka}</div>`;
+      hoverLabel.style.display = 'block';
+      hoverLabel.style.left = (e.clientX + 16) + 'px';
+      hoverLabel.style.top = (e.clientY - 30) + 'px';
+    } else {
+      hoverLabel.style.display = 'none';
+    }
+  }
+  if (taskDragging && dragTaskIdx >= 0) {
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) > 3) wasDragging = true;
+    if (wasDragging) {
+      const rawMs = dragStartMs + dx / (canvas.width / S.zoom);
+      const snapped = applySnap(rawMs);
+      if (snapped !== dragPreSnap) {
+        S.db = JSON.parse(JSON.stringify(S.db));
+        S.db[dragTaskIdx].start = snapped;
+        if (isMovable()) {
+          if (snapped > dragPreSnap) pushRight(dragTaskIdx);
+          else pushLeft(dragTaskIdx);
+        } else {
+          resolveOverlapSnap(dragTaskIdx);
+        }
+        dragPreSnap = snapped;
+        render();
+      }
+    }
+    return;
+  }
+  if (panning) {
+    const dx = e.clientX - panStartX;
+    S.pan = applySnap(panStartPan - dx / (canvas.width / S.zoom));
+    render();
+  }
+});
 function renderNowLine() {
   nowLine.style.left = msToScreen(Date.now()) + 'px';
 }
