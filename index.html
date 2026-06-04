@@ -520,9 +520,10 @@ function drawAxis() {
 
   if (span < MS.d * 14) {
     let t = Math.floor(visStart / MS.d) * MS.d;
-    while (t < visEnd) {
+    while (t < visEnd + MS.d) {
       const ds = new Date(t);
-      const lx = msToScreen(t + MS.d/2);
+      ds.setHours(6, 0, 0, 0);
+      const lx = msToScreen(ds.getTime());
       if (lx > 0 && lx < W) {
         ctx.fillStyle = '#d0d0c8';
         ctx.font = '10px "JetBrains Mono"';
