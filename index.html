@@ -846,9 +846,9 @@ function closeConsole(save) {
 }
 cmdInput.addEventListener('keydown', e => {
   if (!consoleMode) return;
-  if (e.key === 'Enter') { e.preventDefault(); closeConsole(true); }
-  if (e.key === 'Escape') { e.preventDefault(); closeConsole(false); }
-  if (e.key === ',') { e.preventDefault(); closeConsole(true); }
+  if (e.key==='Enter') { e.preventDefault(); closeConsole(true); }
+  if (e.key==='Escape') { e.preventDefault(); closeConsole(false); }
+  // if (e.key===',') { e.preventDefault(); closeConsole(true); }
 });
 
 let panning = false, panStartX = 0, panStartPan = 0;
@@ -1153,7 +1153,7 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
 
   if (e.key==='.') { e.preventDefault(); openConsole(); return; }
-  if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
+  // if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
 
   if (e.key==='q'||e.key==='Q') { S.holding.q = true; updateHover(); }
   if (e.key==='a'||e.key==='A') S.holding.a = true;
@@ -1344,7 +1344,7 @@ $('auth-btn').addEventListener('click', () => {
 });
 
 $('auth-pass').addEventListener('keydown', e => {
-  if (e.key === 'Enter') $('auth-btn').click();
+  if (e.key==='Enter') $('auth-btn').click();
 });
 
 let originalJson = "";
