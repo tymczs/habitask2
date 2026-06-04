@@ -1061,13 +1061,20 @@ tlEl.addEventListener('wheel', e => {
     if (Math.abs(scrollState.q.accum) > 50) {
       const dir = scrollState.q.accum > 0 ? 1 : -1;
       scrollState.q.accum = 0;
-      if (S.db.length) {
-        const base = S.focusIdx < 0 ? (dir > 0 ? 0 : S.db.length - 1) : S.focusIdx + dir;
-        S.focusIdx = Math.max(0, Math.min(S.db.length - 1, base));
-        if (S.db[S.focusIdx]) {
-          const t = S.db[S.focusIdx];
-          S.pan = Date.now() - (t.start + t.dur / 2);
-        }
+      
+      const vis = S.db.map((t, i) => {
+        const diff = Date.now() - (t.start + t.dur);
+        return (t.done && !S.showDone && diff >= 43200000) ? -1 : i;
+      }).filter(i => i !== -1);
+      
+      if (vis.length) {
+        let currPos = vis.indexOf(S.focusIdx);
+        if (currPos === -1) currPos = dir > 0 ? -1 : vis.length;
+        
+        const nextPos = Math.max(0, Math.min(vis.length - 1, currPos + dir));
+        S.focusIdx = vis[nextPos];
+        const t = S.db[S.focusIdx];
+        S.pan = Date.now() - (t.start + t.dur / 2);
         render();
       }
     }
