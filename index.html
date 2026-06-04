@@ -112,7 +112,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .task-time{font-size:9px;color:var(--accent);margin-top:1px}
 .task-dur-real{font-size:9px;color:var(--accent2);margin-top:1px}
 .task-full .task-title{white-space:normal;font-size:12px}
-.task-full .task-note{font-size:10px;color:var(--text2);margin-top:4px}
+.task-full .task-note {
+  font-size: 10px;
+  color: var(--text2);
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
 .task-full .task-client{font-size:10px;color:var(--accent3)}
 .task-compact{height:28px!important}
 .task-group-pill{
@@ -159,7 +164,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <div id="app" style="display:none">
   <div id="cmd-bar">
     <span class="logo">HABITASK</span>
-    <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
+    <textarea id="cmd-input" rows="1" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly style="resize:none;"></textarea>
     <span id="cmd-hint"></span>
     <div style="display:flex;gap:6px;margin-left:auto;">
       <button id="btn-edit-json" title="Edytuj JSON" style="background:var(--bg4);border:1px solid #b58900;color:#b58900;padding:4px 10px;cursor:pointer;border-radius:3px;font-size:16px;">✎</button>
@@ -846,8 +851,14 @@ function closeConsole(save) {
 }
 cmdInput.addEventListener('keydown', e => {
   if (!consoleMode) return;
-  if (e.key==='Enter') { e.preventDefault(); closeConsole(true); }
-  if (e.key==='Escape') { e.preventDefault(); closeConsole(false); }
+  if (e.key === 'Enter' && !e.shiftKey) { 
+    e.preventDefault(); 
+    closeConsole(true); 
+  }
+  if (e.key === 'Escape') { 
+    e.preventDefault(); 
+    closeConsole(false); 
+  }
 });
 
 let panning = false, panStartX = 0, panStartPan = 0;
