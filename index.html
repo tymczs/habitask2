@@ -121,6 +121,25 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   border:1px solid var(--border);padding:1px 5px;
   color:var(--text3);border-radius:2px;letter-spacing:0.05em;white-space:nowrap;
 }
+
+#help-panel {
+  position: fixed; inset: 0; z-index: 9000; background: rgba(10, 10, 12, 0.85);
+  display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+}
+.help-content {
+  background: var(--bg2); border: 1px solid var(--accent); padding: 24px;
+  border-radius: 6px; max-width: 500px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+}
+.help-title {
+  color: var(--accent); font-family: var(--font-ui); font-size: 16px; font-weight: 800;
+  letter-spacing: 0.1em; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px;
+}
+.help-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 11px; color: var(--text2);
+}
+.help-grid span:nth-child(odd) {
+  color: var(--text); font-weight: bold; text-align: right;
+}
 </style>
 </head>
 <body>
@@ -180,6 +199,35 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       </label>
     <div class="stat-item" id="st-time">—</div>
     <div id="sync-indicator">[SYNC]</div>
+  </div>
+</div>
+
+<div id="help-panel">
+  <div class="help-content">
+    <div class="help-title">HOTKEYS</div>
+    <div class="help-grid">
+      <span>. / ,</span><span>Konsola / Zapisz edycję</span>
+      <span>Spacja</span><span>Zmień status wykonania</span>
+      <span>Del / Backspace</span><span>Usuń zadanie</span>
+      <span>E</span><span>Edytuj zadanie w konsoli</span>
+      <span>T / C</span><span>Centruj NOW / Centruj zadanie</span>
+      <span>1 - 5</span><span>Zmień poziom przybliżenia</span>
+      <span>W / D</span><span>Tryb kompaktowy / Pokazuj wykonane</span>
+      <span>M / N</span><span>Przesuwanie (Movable) / Dane (Hover)</span>
+      <span>Q + Scroll</span><span>Skacz kamerą po zadaniach</span>
+      <span>A + Scroll</span><span>Przesuwaj zadanie na osi</span>
+      <span>Z + Scroll</span><span>Skaluj czas trwania zadania</span>
+    </div>
+    <div class="help-title" style="margin-top:20px">COMMAND SYNTAX</div>
+    <div class="help-grid">
+      <span>'Tytuł'</span><span>Nazwa zadania</span>
+      <span>--tekst--</span><span>Komentarz / Notatka</span>
+      <span>@klient</span><span>Przypisanie klienta</span>
+      <span>#grupa</span><span>Tag / Grupa projektowa</span>
+      <span>^"2h" / ^"30m"</span><span>Czas rzeczywisty wykonania</span>
+      <span>~"tekst"</span><span>Dowolny opis czasu trwania</span>
+      <span>"2h" / "10:00-12:00"</span><span>Planowany czas lub zakres</span>
+    </div>
   </div>
 </div>
 
@@ -1145,6 +1193,20 @@ window.addEventListener('keydown', e => {
       cmdInput.classList.add('editing');
     }
     return;
+  }
+  if (e.key==='h'||e.key==='H') {
+    e.preventDefault();
+    const p = $('help-panel');
+    p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+    return;
+  }
+  
+  if (e.key==='Escape') {
+    const p = $('help-panel');
+    if (p && p.style.display === 'flex') {
+      p.style.display = 'none';
+      return;
+    }
   }
 });
 
