@@ -40,18 +40,33 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #auth-err{font-size:10px;color:var(--now);text-align:center;min-height:14px;letter-spacing:0.04em}
 #auth-status{font-size:10px;color:var(--text3);text-align:center;letter-spacing:0.04em}
 #app{display:flex;flex-direction:column;height:100vh;width:100vw}
-#cmd-bar{
-  flex-shrink:0;height:48px;background:var(--bg2);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:12px;padding:0 16px;
-  font-family:var(--font-ui);
+#cmd-bar {
+  flex-shrink: 0;
+  min-height: 48px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  font-family: var(--font-ui);
 }
 #cmd-bar .logo{font-size:14px;font-weight:800;letter-spacing:0.08em;color:var(--accent);flex-shrink:0}
-#cmd-input{
-  flex:1;background:var(--bg3);border:1px solid var(--border);
-  color:var(--text);font-family:var(--font-mono);font-size:12px;
-  padding:6px 12px;outline:none;border-radius:3px;
-  transition:border-color 0.15s;
+#cmd-input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  outline: none;
+  border-radius: 3px;
+  transition: border-color 0.15s;
+  resize: none;
+  overflow: hidden;
+  min-height: 28px;
+  line-height: 1.4;
 }
 #cmd-input:focus{border-color:var(--accent)}
 #cmd-input.editing{border-color:var(--focus);border-width:2px}
@@ -800,6 +815,11 @@ function parseCommand(raw) {
 let consoleMode = false;
 let editingTask = null;
 
+function autoResizeInput() {
+  cmdInput.style.height = 'auto';
+  cmdInput.style.height = cmdInput.scrollHeight + 'px';
+}
+
 function openConsole(prefill) {
   consoleMode = true;
   S.consoleMode = true;
@@ -809,6 +829,7 @@ function openConsole(prefill) {
   cmdInput.classList.remove('editing');
   cmdInput.focus();
   $('cmd-hint').textContent = editingTask ? 'EDYCJA' : 'NOWE';
+  autoResizeInput();
 }
 
 function closeConsole(save) {
@@ -847,8 +868,11 @@ function closeConsole(save) {
   cmdInput.placeholder = '. — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano';
   cmdInput.classList.remove('editing');
   $('cmd-hint').textContent = '';
+  autoResizeInput();
   render();
 }
+cmdInput.addEventListener('input', autoResizeInput);
+
 cmdInput.addEventListener('keydown', e => {
   if (!consoleMode) return;
   if (e.key === 'Enter' && !e.shiftKey) { 
