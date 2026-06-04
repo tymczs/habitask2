@@ -848,7 +848,6 @@ cmdInput.addEventListener('keydown', e => {
   if (!consoleMode) return;
   if (e.key==='Enter') { e.preventDefault(); closeConsole(true); }
   if (e.key==='Escape') { e.preventDefault(); closeConsole(false); }
-  // if (e.key===',') { e.preventDefault(); closeConsole(true); }
 });
 
 let panning = false, panStartX = 0, panStartPan = 0;
@@ -1077,7 +1076,7 @@ tlEl.addEventListener('wheel', e => {
       const vis = S.db.map((t, i) => {
         const diff = Date.now() - (t.start + t.dur);
         return (t.done && !S.showDone && diff >= 43200000) ? -1 : i;
-      }).filter(i => i !== -1);
+      }).filter(i => i !== -1).sort((a, b) => S.db[a].start - S.db[b].start);
       
       if (vis.length) {
         let currPos = vis.indexOf(S.focusIdx);
@@ -1153,7 +1152,6 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
 
   if (e.key==='.') { e.preventDefault(); openConsole(); return; }
-  // if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
 
   if (e.key==='q'||e.key==='Q') { S.holding.q = true; updateHover(); }
   if (e.key==='a'||e.key==='A') S.holding.a = true;
