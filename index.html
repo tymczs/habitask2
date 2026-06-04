@@ -693,8 +693,12 @@ window.addEventListener('mousemove', e => {
   }
   if (taskDragging && dragTaskIdx >= 0) {
     wasDragging = true;
+    const oldStart = S.db[dragTaskIdx].start;
     S.db[dragTaskIdx].start = applySnap(dragStartMs + (e.clientX - dragStartX) * (S.zoom / canvas.width));
-    if (isMovable()) pushRight(dragTaskIdx);
+    if (isMovable()) {
+      if (S.db[dragTaskIdx].start < oldStart) pushLeft(dragTaskIdx);
+      else if (S.db[dragTaskIdx].start > oldStart) pushRight(dragTaskIdx);
+    }
     else resolveOverlapSnap(dragTaskIdx);
     render();
   } else {
