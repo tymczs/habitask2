@@ -593,12 +593,64 @@ function renderTasks() {
   });
 }
 
+let lastMouseX = 0, lastMouseY = 0;
+
+function updateHover() {
+  if (!S.sToggle) { hoverLabel.style.display = 'none'; return; }
+  let tIdx = undefined;
+  if (taskDragging && dragTaskIdx >= 0) {
+    tIdx = dragTaskIdx;
+  } else {
+    const el = document.elementFromPoint(lastMouseX, lastMouseY)?.closest('.task');
+    if (el) tIdx = el.dataset.idx;
+  }
+  if (tIdx !== undefined && S.db[tIdx]) {
+    const t = S.db[tIdx];
+    const st = formatTime(t.start, 'HH:MM');
+    const en = formatTime(t.start + t.dur, 'HH:MM');
+    const dr = formatDur(t.dur);
+    const cl = t.id_klienta || t.client || '';
+    const gr = Array.isArray(t.grupa) && t.grupa.length ? t.grupa.join(', ') : (t.group || '');
+    const nt = t.komentarz || t.note || '';
+    let det = `${st} - ${en}<br>⏳ ${dr}`;
+    if (cl) det += `<br>${cl}`;
+    if (gr) det += `<br>${gr}`;
+    if (nt) det += `<br>${nt}`;
+    hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${det}</div>`;
+    hoverLabel.style.display = 'block';
+    hoverLabel.style.left = (lastMouseX + 15) + 'px';
+    hoverLabel.style.top = (lastMouseY + 15) + 'px';
+  } else {
+    hoverLabel.style.display = 'none';
+  }
+}
+
 function render() {
   drawAxis();
   renderNowLine();
   renderTasks();
   updateStats();
+  updateHover();
 }
+
+window.addEventListener('mousemove', e => {
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+  if (panning) {
+    S.pan = panStartPan - (e.clientX - panStartX) * (S.zoom / canvas.width);
+    render();
+    return;
+  }
+  if (taskDragging && dragTaskIdx >= 0) {
+    wasDragging = true;
+    S.db[dragTaskIdx].start = applySnap(dragStartMs + (e.clientX - dragStartX) * (S.zoom / canvas.width));
+    if (isMovable()) pushRight(dragTaskIdx);
+    else resolveOverlapSnap(dragTaskIdx);
+    render();
+  } else {
+    updateHover();
+  }
+});
 
 function updateStats() {
   const total = S.db.length;
