@@ -1188,6 +1188,7 @@ window.addEventListener('keydown', e => {
   }
 
   if (e.key==='e'||e.key==='E') {
+    e.preventDefault();
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
       editingTask=S.db[S.focusIdx];
       S.editingId=editingTask.id;
@@ -1205,6 +1206,7 @@ window.addEventListener('keydown', e => {
     }
     return;
   }
+
   if (e.key==='h'||e.key==='H') {
     e.preventDefault();
     const p = $('help-panel');
@@ -1360,6 +1362,30 @@ $('file-upload').addEventListener('change', async (e) => {
 });
 $('name-chk').addEventListener('change', e => { S.sToggle = e.target.checked; if (!S.sToggle) hoverLabel.style.display = 'none'; });
 $('done-chk').addEventListener('change', e => { S.showDone = e.target.checked; render(); });
+</script>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyByv3AyNwfygG9fnnj8XUPdpOfvz6kFSqk",
+    authDomain: "habitask-synchronizer.firebaseapp.com",
+    projectId: "habitask-synchronizer",
+    storageBucket: "habitask-synchronizer.firebasestorage.app",
+    messagingSenderId: "1064278800556",
+    appId: "1:1064278800556:web:a8aeba18ea5fbb1a560709",
+    measurementId: "G-MQX8SW948Q"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
 </script>
 </body>
 </html>
