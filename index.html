@@ -175,7 +175,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <span style="color:var(--text3);letter-spacing:0.04em">NAME (N)</span>
       </label>
       <label class="stat-item" style="gap:6px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="done-chk" checked style="accent-color:var(--accent3);width:12px;height:12px;cursor:pointer">
+        <input type="checkbox" id="done-chk" style="accent-color:var(--accent3);width:12px;height:12px;cursor:pointer">
         <span style="color:var(--text3);letter-spacing:0.04em">DONE (D)</span>
       </label>
     <div class="stat-item" id="st-time">—</div>
@@ -195,7 +195,7 @@ const S = {
   consoleMode: false,
   editingId: null,
   sToggle: false,
-  showDone: true,
+  showDone: false,
   holding: { q: false, a: false, z: false },
   db: [],
   nextId: 1,
@@ -896,16 +896,28 @@ window.addEventListener('mousemove', e => {
     return;
   }
   if (S.sToggle) {
-    const el = e.target.closest('.task');
-    if (el && el.dataset.idx !== undefined) {
-      const t = S.db[el.dataset.idx];
-      hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${t.komentarz || t.note || ''}</div>`;
-      hoverLabel.style.display = 'block';
-      hoverLabel.style.left = (e.clientX + 15) + 'px';
-      hoverLabel.style.top = (e.clientY + 15) + 'px';
-    } else {
-      hoverLabel.style.display = 'none';
-    }
+  const el = e.target.closest('.task');
+  if (el && el.dataset.idx !== undefined) {
+    const t = S.db[el.dataset.idx];
+    const st = formatTime(t.start, 'HH:MM');
+    const en = formatTime(t.start + t.dur, 'HH:MM');
+    const dr = formatDur(t.dur);
+    const cl = t.id_klienta || t.client || '';
+    const gr = Array.isArray(t.grupa) && t.grupa.length ? t.grupa.join(', ') : (t.group || '');
+    const nt = t.komentarz || t.note || '';
+    
+    let det = `${st} - ${en}<br>⏳ ${dr}`;
+    if (cl) det += `<br>${cl}`;
+    if (gr) det += `<br>${gr}`;
+    if (nt) det += `<br>${nt}`;
+    
+    hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${det}</div>`;
+    hoverLabel.style.display = 'block';
+    hoverLabel.style.left = (e.clientX + 15) + 'px';
+    hoverLabel.style.top = (e.clientY + 15) + 'px';
+  } else {
+    hoverLabel.style.display = 'none';
+  }
   }
 });
 
@@ -1023,10 +1035,9 @@ window.addEventListener('keydown', e => {
   if (e.key==='m'||e.key==='M') { e.preventDefault(); $('movable-chk').checked = !$('movable-chk').checked; return; }
   if (e.key==='n'||e.key==='N') { e.preventDefault(); S.sToggle = !S.sToggle; $('name-chk').checked = S.sToggle; if (!S.sToggle) hoverLabel.style.display = 'none'; return; }
   if (e.key==='d'||e.key==='D') { e.preventDefault(); S.showDone = !S.showDone; $('done-chk').checked = S.showDone; render(); return; }
-
-  if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
   if (e.key==='t'||e.key==='T') { S.pan=0; render(); return; }
   if (e.key==='c'||e.key==='C') {
+    if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
     if (S.focusIdx>=0&&S.db[S.focusIdx]) {
       const t=S.db[S.focusIdx]; S.pan=Date.now()-(t.start+t.dur/2);
     }
