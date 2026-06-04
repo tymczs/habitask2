@@ -698,7 +698,6 @@ function closeConsole(save) {
           saveHistory();
           t.id = editingTask.id;
           t.start = editingTask.start;
-          t.dur = editingTask.dur;
           t.dur_real = t.dur_real || editingTask.dur_real || 0;
           t.done = editingTask.done;
           t.wykonano = editingTask.wykonano;
@@ -727,7 +726,6 @@ function closeConsole(save) {
   $('cmd-hint').textContent = '';
   render();
 }
-
 cmdInput.addEventListener('keydown', e => {
   if (!consoleMode) return;
   if (e.key === 'Enter') { e.preventDefault(); closeConsole(true); }
@@ -954,59 +952,53 @@ tlEl.addEventListener('wheel', e => {
 
   if (S.holding.q) {
     scrollState.q.accum += dy;
-    clearTimeout(scrollState.q.timer);
-    scrollState.q.timer = setTimeout(() => {
+    if (Math.abs(scrollState.q.accum) > 50) {
       const dir = scrollState.q.accum > 0 ? 1 : -1;
       scrollState.q.accum = 0;
-      if (!S.db.length) return;
-      const base = S.focusIdx < 0 ? (dir > 0 ? 0 : S.db.length - 1) : S.focusIdx + dir;
-      S.focusIdx = Math.max(0, Math.min(S.db.length - 1, base));
-      render();
-    }, 40);
+      if (S.db.length) {
+        const base = S.focusIdx < 0 ? (dir > 0 ? 0 : S.db.length - 1) : S.focusIdx + dir;
+        S.focusIdx = Math.max(0, Math.min(S.db.length - 1, base));
+        render();
+      }
+    }
     return;
   }
 
   if (S.holding.a) {
     scrollState.a.accum += dy;
-    clearTimeout(scrollState.a.timer);
-    scrollState.a.timer = setTimeout(() => {
-      const accum = scrollState.a.accum;
-      scrollState.a.accum = 0;
+    if (Math.abs(scrollState.a.accum) > 50) {
       if (S.focusIdx < 0 || !S.db[S.focusIdx]) return;
-      const dir = accum > 0 ? 1 : -1;
-      const steps = Math.max(1, Math.round(Math.abs(accum) / 100));
+      const dir = scrollState.a.accum > 0 ? 1 : -1;
+      const steps = Math.floor(Math.abs(scrollState.a.accum) / 50);
+      scrollState.a.accum = 0;
       saveHistory();
       const snap = snapMs();
       S.db[S.focusIdx].start = applySnap(S.db[S.focusIdx].start + dir * steps * snap);
       if (isMovable()) {
         if (dir > 0) pushRight(S.focusIdx);
         else pushLeft(S.focusIdx);
-      } else {
-        resolveOverlapSnap(S.focusIdx);
-      }
+      } else resolveOverlapSnap(S.focusIdx);
       cloudSave();
       render();
-    }, 40);
+    }
     return;
   }
 
   if (S.holding.z) {
     scrollState.z.accum += dy;
-    clearTimeout(scrollState.z.timer);
-    scrollState.z.timer = setTimeout(() => {
-      const accum = scrollState.z.accum;
-      scrollState.z.accum = 0;
+    if (Math.abs(scrollState.z.accum) > 50) {
       if (S.focusIdx < 0 || !S.db[S.focusIdx]) return;
-      const dir = accum > 0 ? 1 : -1;
-      const steps = Math.max(1, Math.round(Math.abs(accum) / 100));
-      const snap = snapMs();
+      const dir = scrollState.z.accum > 0 ? 1 : -1;
+      const steps = Math.floor(Math.abs(scrollState.z.accum) / 50);
+      scrollState.z.accum = 0;
       saveHistory();
+      const snap = snapMs();
       S.db[S.focusIdx].dur = Math.max(snap, applySnap(S.db[S.focusIdx].dur + dir * steps * snap));
       if (isMovable()) pushRight(S.focusIdx);
       else resolveOverlapSnap(S.focusIdx);
       cloudSave();
       render();
-    }, 40);
+    }
     return;
   }
 
@@ -1021,7 +1013,6 @@ tlEl.addEventListener('wheel', e => {
     render();
   }, 16);
 }, { passive: false });
-
 window.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName.toLowerCase();
   if (tag === 'input') {
