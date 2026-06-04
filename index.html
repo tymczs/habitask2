@@ -598,7 +598,9 @@ let lastMouseX = 0, lastMouseY = 0;
 function updateHover() {
   if (!S.sToggle) { hoverLabel.style.display = 'none'; return; }
   let tIdx = undefined;
-  if (taskDragging && dragTaskIdx >= 0) {
+  if (S.holding.q && S.focusIdx >= 0) {
+    tIdx = S.focusIdx;
+  } else if (taskDragging && dragTaskIdx >= 0) {
     tIdx = dragTaskIdx;
   } else {
     const el = document.elementFromPoint(lastMouseX, lastMouseY)?.closest('.task');
@@ -1010,6 +1012,10 @@ tlEl.addEventListener('wheel', e => {
       if (S.db.length) {
         const base = S.focusIdx < 0 ? (dir > 0 ? 0 : S.db.length - 1) : S.focusIdx + dir;
         S.focusIdx = Math.max(0, Math.min(S.db.length - 1, base));
+        if (S.db[S.focusIdx]) {
+          const t = S.db[S.focusIdx];
+          S.pan = Date.now() - (t.start + t.dur / 2);
+        }
         render();
       }
     }
@@ -1078,7 +1084,7 @@ window.addEventListener('keydown', e => {
   if (e.key==='.') { e.preventDefault(); openConsole(); return; }
   if (e.key===',') { e.preventDefault(); closeConsole(true); return; }
 
-  if (e.key==='q'||e.key==='Q') S.holding.q = true;
+  if (e.key==='q'||e.key==='Q') { S.holding.q = true; updateHover(); }
   if (e.key==='a'||e.key==='A') S.holding.a = true;
   if (e.key==='z'||e.key==='Z') S.holding.z = true;
 
@@ -1143,7 +1149,7 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keyup', e => {
-  if (e.key==='q'||e.key==='Q') S.holding.q = false;
+  if (e.key==='q'||e.key==='Q') { S.holding.q = false; updateHover(); }
   if (e.key==='a'||e.key==='A') S.holding.a = false;
   if (e.key==='z'||e.key==='Z') S.holding.z = false;
 });
