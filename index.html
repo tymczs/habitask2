@@ -162,9 +162,21 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <input id="cmd-input" placeholder=". — otwórz konsolę  |  T — centruj NOW  |  1-5 — zoom  |  Spacja — wykonano" readonly>
     <span id="cmd-hint"></span>
     <div style="display:flex;gap:6px;margin-left:12px;">
-      <button id="btn-download" title="Pobierz JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:4px 8px;cursor:pointer;border-radius:3px;">⭳</button>
-      <button id="btn-upload" title="Wgraj JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--accent3);padding:4px 8px;cursor:pointer;border-radius:3px;">⭱</button>
+      <button id="btn-edit-json" title="Edytuj JSON" style="background:var(--bg4);border:1px solid #b58900;color:#b58900;padding:4px 8px;cursor:pointer;border-radius:3px;font-family:var(--font-mono);font-size:12px;font-weight:bold;">EDIT</button>
+      <button id="btn-download" title="Pobierz JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:4px 8px;cursor:pointer;border-radius:3px;font-family:var(--font-mono);font-size:12px;font-weight:bold;">DL</button>
+      <button id="btn-upload" title="Wgraj JSON" style="background:var(--bg4);border:1px solid var(--border);color:var(--accent3);padding:4px 8px;cursor:pointer;border-radius:3px;font-family:var(--font-mono);font-size:12px;font-weight:bold;">UP</button>
       <input type="file" id="file-upload" style="display:none" accept=".json">
+    </div>
+  </div>
+
+  <div id="json-panel" style="position:fixed;inset:0;z-index:9000;background:rgba(10,10,12,0.85);display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
+    <div class="help-content" style="max-width:800px;display:flex;flex-direction:column;height:80vh;">
+      <div class="help-title" style="color:#b58900;border-color:#b58900;">EDYCJA JSON</div>
+      <textarea id="json-editor" spellcheck="false" style="flex:1;background:var(--bg3);color:var(--text);border:1px solid var(--border);font-family:var(--font-mono);font-size:11px;padding:10px;resize:none;outline:none;"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
+        <button id="json-discard" style="background:var(--bg4);color:var(--text);border:1px solid var(--border);padding:8px 16px;cursor:pointer;font-family:var(--font-ui);font-weight:700;">ODRZUĆ</button>
+        <button id="json-save" style="background:#b58900;color:#000;border:none;padding:8px 16px;cursor:pointer;font-family:var(--font-ui);font-weight:700;">ZAPISZ</button>
+      </div>
     </div>
   </div>
   <div id="timeline">
@@ -1215,6 +1227,19 @@ window.addEventListener('keydown', e => {
   }
   
   if (e.key==='Escape') {
+    const jp = $('json-panel');
+    if (jp && jp.style.display === 'flex') {
+      if ($('json-editor').value !== originalJson) {
+        if (confirm('Zapisać zmiany w JSON przed wyjściem?')) {
+          $('json-save').click();
+        } else {
+          jp.style.display = 'none';
+        }
+      } else {
+        jp.style.display = 'none';
+      }
+      return;
+    }
     const p = $('help-panel');
     if (p && p.style.display === 'flex') {
       p.style.display = 'none';
@@ -1320,6 +1345,31 @@ $('auth-btn').addEventListener('click', () => {
 
 $('auth-pass').addEventListener('keydown', e => {
   if (e.key === 'Enter') $('auth-btn').click();
+});
+
+let originalJson = "";
+
+$('btn-edit-json').addEventListener('click', () => {
+  originalJson = JSON.stringify(S.db, null, 2);
+  $('json-editor').value = originalJson;
+  $('json-panel').style.display = 'flex';
+});
+
+$('json-discard').addEventListener('click', () => {
+  $('json-panel').style.display = 'none';
+});
+
+$('json-save').addEventListener('click', () => {
+  try {
+    const parsed = JSON.parse($('json-editor').value);
+    S.db = parsed.map(t => ({ dur_real: 0, ...t }));
+    saveHistory();
+    render();
+    cloudSave();
+    $('json-panel').style.display = 'none';
+  } catch(err) {
+    alert("Błąd składni JSON: " + err.message);
+  }
 });
 
 $('btn-download').addEventListener('click', () => {
