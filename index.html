@@ -71,6 +71,47 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #cmd-input:focus{border-color:var(--accent)}
 #cmd-input.editing{border-color:var(--focus);border-width:2px}
 #cmd-hint{font-size:10px;color:var(--text3);flex-shrink:0;letter-spacing:0.03em}
+
+#sticker-icon {
+position: absolute;
+top: 20px;
+right: 20px;
+font-size: 48px;
+background: none;
+border: none;
+cursor: pointer;
+z-index: 100;
+transition: transform 0.1s;
+}
+#sticker-icon:hover {
+transform: scale(1.1);
+}
+#sticker-panel {
+position: absolute;
+top: 80px;
+right: 20px;
+width: 320px;
+height: 320px;
+background: #fdf5c9;
+border: 1px solid #e0d590;
+box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+z-index: 101;
+display: none;
+border-radius: 4px;
+}
+#sticker-textarea {
+width: 100%;
+height: 100%;
+background: transparent;
+border: none;
+padding: 16px;
+color: #111;
+font-family: var(--font-mono);
+font-size: 14px;
+resize: none;
+outline: none;
+}
+
 #timeline{
   flex:1;position:relative;overflow:hidden;
   background:var(--bg);cursor:default;user-select:none;
@@ -203,6 +244,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <canvas id="axis-canvas"></canvas>
     <div id="tasks-layer"></div>
     <div id="now-line"></div>
+    <button id="sticker-icon">📝</button>
+    <div id="sticker-panel">
+    <textarea id="sticker-textarea" spellcheck="false" placeholder="Szybka notatka..."></textarea>
+    </div>
   </div>
   <div id="hover-label"></div>
   <div id="stats">
@@ -268,18 +313,19 @@ const MS = { h: 3600000, d: 86400000, w: 604800000, mo: 2592000000, y: 315360000
 const ZOOM_PRESETS = [MS.h * 2, MS.d * 1.5, MS.w, MS.mo, MS.y * 1.2];
 
 const S = {
-  pan: 0,
-  zoom: 1,
-  focusIdx: -1,
-  compactMode: true,
-  consoleMode: false,
-  editingId: null,
-  sToggle: false,
-  showDone: false,
-  holding: { q: false, a: false, z: false },
-  db: [],
-  nextId: 1,
-  currentFile: 'timeline-db.enc'
+pan: 0,
+zoom: 1,
+focusIdx: -1,
+compactMode: true,
+consoleMode: false,
+editingId: null,
+sToggle: false,
+showDone: false,
+holding: { q: false, a: false, z: false },
+db: [],
+nextId: 1,
+currentFile: 'timeline-db.enc',
+notes: ''
 };
 
 let cryptoKey = null;
@@ -337,27 +383,26 @@ function showSync(on) {
 }
 
 async function cloudSave() {
-  if (!cryptoKey || !workerUrl) return;
-  showSync(true);
-  try {
-    const plain = JSON.stringify(S.db);
-    const cipher = await encryptData(cryptoKey, plain);
-    await cloudPut(cipher);
-  } catch (_) {}
-  showSync(false);
+if (!cryptoKey || !workerUrl) return;
+showSync(true);
+try {
+const plain = JSON.stringify({ tasks: S.db, notes: S.notes });
+const cipher = await encryptData(cryptoKey, plain);
+await cloudPut(cipher);
+} catch (_) {}
+showSync(false);
 }
 
 async function cloudSaveImmediate() {
-  if (!cryptoKey || !workerUrl) return;
-  showSync(true);
-  try {
-    const plain = JSON.stringify(S.db);
-    const cipher = await encryptData(cryptoKey, plain);
-    await cloudPut(cipher);
-  } catch (_) {}
-  showSync(false);
+if (!cryptoKey || !workerUrl) return;
+showSync(true);
+try {
+const plain = JSON.stringify({ tasks: S.db, notes: S.notes });
+const cipher = await encryptData(cryptoKey, plain);
+await cloudPut(cipher);
+} catch (_) {}
+showSync(false);
 }
-
 const historyStack = { stack: [], cursor: -1, maxSize: 60 };
 
 function saveHistory() {
@@ -1177,12 +1222,12 @@ tlEl.addEventListener('wheel', e => {
     render();
   }, 16);
 }, { passive: false });
-window.addEventListener('keydown', e => {
+  window.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName.toLowerCase();
-  if (tag === 'input') {
-    if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
-    if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); }
-    return;
+  if (tag === 'input' || tag === 'textarea') {
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); }
+  return;
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
@@ -1312,16 +1357,25 @@ async function boot(url, password) {
     $('auth-status').textContent = 'Pobieranie danych…';
     const cipher = await fetch(workerUrl + '/' + target, { cache: 'no-store' }).then(r => r.text());
 
-    if (cipher) {
-      try {
-        const plain = await decryptData(cryptoKey, cipher);
-        const parsed = JSON.parse(plain);
-        S.db = Array.isArray(parsed) ? parsed.map(t => ({ dur_real: 0, ...t })) : [];
-      } catch (e) {
-        throw new Error('Błąd deszyfrowania lub złe hasło');
-      }
+  if (cipher) {
+    try {
+    const plain = await decryptData(cryptoKey, cipher);
+    const parsed = JSON.parse(plain);
+    if (Array.isArray(parsed)) {
+    S.db = parsed.map(t => ({ dur_real: 0, ...t }));
+    S.notes = '';
     } else {
-      S.db = [];
+    S.db = (parsed.tasks || []).map(t => ({ dur_real: 0, ...t }));
+    S.notes = parsed.notes || '';
+    }
+    $('sticker-textarea').value = S.notes;
+    } catch (e) {
+    throw new Error('Błąd deszyfrowania lub złe hasło');
+    }
+    } else {
+    S.db = [];
+    S.notes = '';
+    $('sticker-textarea').value = S.notes;
     }
   } catch (e) {
     $('auth-err').textContent = 'Błąd połączenia: ' + e.message;
@@ -1384,7 +1438,7 @@ $('auth-pass').addEventListener('keydown', e => {
 let originalJson = "";
 
 $('btn-edit-json').addEventListener('click', () => {
-  originalJson = JSON.stringify(S.db, null, 2);
+  originalJson = JSON.stringify({ tasks: S.db, notes: S.notes }, null, 2);
   $('json-editor').value = originalJson;
   $('json-panel').style.display = 'flex';
 });
@@ -1396,7 +1450,13 @@ $('json-discard').addEventListener('click', () => {
 $('json-save').addEventListener('click', () => {
   try {
     const parsed = JSON.parse($('json-editor').value);
-    S.db = parsed.map(t => ({ dur_real: 0, ...t }));
+    if (Array.isArray(parsed)) {
+      S.db = parsed.map(t => ({ dur_real: 0, ...t }));
+    } else {
+      S.db = (parsed.tasks || []).map(t => ({ dur_real: 0, ...t }));
+      S.notes = parsed.notes || '';
+      $('sticker-textarea').value = S.notes;
+    }
     saveHistory();
     render();
     cloudSave();
@@ -1407,7 +1467,7 @@ $('json-save').addEventListener('click', () => {
 });
 
 $('btn-download').addEventListener('click', () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(S.db, null, 2));
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ tasks: S.db, notes: S.notes }, null, 2));
   const a = document.createElement('a');
   a.setAttribute("href", dataStr);
   a.setAttribute("download", "chronos_db_" + Date.now() + ".json");
@@ -1425,13 +1485,18 @@ $('file-upload').addEventListener('change', async (e) => {
   reader.onload = async (event) => {
     try {
       const importedDb = JSON.parse(event.target.result);
-      if (!Array.isArray(importedDb)) throw new Error("Format bazy");
+      if (Array.isArray(importedDb)) {
+        S.db = importedDb.map(t => ({ dur_real: 0, ...t }));
+      } else {
+        S.db = (importedDb.tasks || []).map(t => ({ dur_real: 0, ...t }));
+        S.notes = importedDb.notes || '';
+        $('sticker-textarea').value = S.notes;
+      }
       saveHistory();
-      S.db = importedDb.map(t => ({ dur_real: 0, ...t }));
       render();
       const filename = `timeline-db-v${Date.now()}.enc`;
       S.currentFile = filename;
-      const encrypted = await encryptData(cryptoKey, JSON.stringify(S.db));
+      const encrypted = await encryptData(cryptoKey, JSON.stringify({ tasks: S.db, notes: S.notes }));
       await fetch(workerUrl + '/' + filename, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain' },
@@ -1444,8 +1509,22 @@ $('file-upload').addEventListener('change', async (e) => {
   };
   reader.readAsText(file);
 });
+
 $('name-chk').addEventListener('change', e => { S.sToggle = e.target.checked; if (!S.sToggle) hoverLabel.style.display = 'none'; });
 $('done-chk').addEventListener('change', e => { S.showDone = e.target.checked; render(); });
+
+$('sticker-icon').addEventListener('click', () => {
+const p = $('sticker-panel');
+p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+if (p.style.display === 'flex') $('sticker-textarea').focus();
+});
+
+let noteTimeout;
+$('sticker-textarea').addEventListener('input', e => {
+S.notes = e.target.value;
+clearTimeout(noteTimeout);
+noteTimeout = setTimeout(cloudSave, 1000);
+});
 </script>
 
 <script type="module">
