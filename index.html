@@ -194,7 +194,7 @@ outline: none;
 }
 .help-content {
   background: var(--bg2); border: 1px solid var(--accent); padding: 24px;
-  border-radius: 6px; max-width: 500px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+  border-radius: 6px; max-width: 700px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
 }
 .help-title {
   color: var(--accent); font-family: var(--font-ui); font-size: 16px; font-weight: 800;
@@ -301,6 +301,8 @@ outline: none;
       <span>Q + Scroll</span><span>Skacz kamerą po zadaniach</span>
       <span>A + Scroll</span><span>Przesuwaj zadanie na osi</span>
       <span>Z + Scroll</span><span>Skaluj czas trwania zadania</span>
+      <span>J</span><span>Edytor JSON</span>
+      <span>/</span><span>Sticky Note</span>
     </div>
     <div class="help-title" style="margin-top:20px">COMMAND SYNTAX</div>
     <div class="help-grid">
@@ -1361,6 +1363,20 @@ tlEl.addEventListener('wheel', e => {
       p.style.display = 'none';
       return;
     }
+  }
+
+  if (e.key === 'j' || e.key === 'J') {
+    e.preventDefault();
+    const jp = $('json-panel');
+    if (jp && jp.style.display === 'flex') jp.style.display = 'none';
+    else $('btn-edit-json').click();
+    return;
+  }
+
+  if (e.key === '/') {
+    e.preventDefault();
+    $('sticker-icon').click();
+    return;
   }
 });
 
