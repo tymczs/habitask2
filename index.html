@@ -263,7 +263,7 @@ outline: none;
     <div class="stat-item">FOCUS: <span class="stat-val" id="st-focus">—</span></div>
     <div class="stat-item" style="margin-left:auto;gap:6px">
       <span style="color:var(--text3);letter-spacing:0.04em">SNAP</span>
-      <input id="snap-input" value="5m"
+      <input id="snap-input" value="15m"
         style="width:52px;background:var(--bg3);border:1px solid var(--border);color:var(--accent2);
                font-family:var(--font-mono);font-size:10px;padding:2px 6px;outline:none;
                border-radius:2px;text-align:center;letter-spacing:0.05em">
@@ -310,7 +310,8 @@ outline: none;
       <span>#grupa</span><span>Tag / Grupa projektowa</span>
       <span>^"2h" / ^"30m"</span><span>Czas rzeczywisty wykonania</span>
       <span>~"tekst"</span><span>Dowolny opis czasu trwania</span>
-      <span>"2h" / "10:00-12:00"</span><span>Planowany czas lub zakres</span>
+      <span>"2h" / "t" / "t 2h"</span><span>Planowany czas lub od teraz</span>
+      <span>"14-16" / "14:30-16"</span><span>Precyzyjny zakres godzinowy</span>
     </div>
   </div>
 </div>
@@ -441,7 +442,7 @@ function redo() {
 }
 
 function snapMs() {
-  const raw = ($('snap-input') || { value: '5m' }).value.trim();
+  const raw = ($('snap-input') || { value: '15m' }).value.trim();
   const m = raw.match(/^(\d+(?:\.\d+)?)\s*(h|m|min)?$/i);
   if (!m) return 5 * 60000;
   const v = parseFloat(m[1]);
@@ -844,13 +845,23 @@ function parseCommand(raw) {
   const realM = s.match(/~"([^"]+)"/);
   if (realM) { task.ile_trwalo = realM[1]; s = s.replace(realM[0],'').trim(); }
 
-  const rangeM = s.match(/"(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})"/);
+  const rangeM = s.match(/"(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?"/);
+  const nowM = s.match(/"t(?:\s+(\d+(?:\.\d+)?)(h|m|min)?)?"/);
+
   if (rangeM) {
     const now = new Date();
-    const st = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[1], +rangeM[2], 0);
-    const en = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[3], +rangeM[4], 0);
+    const m1 = rangeM[2] ? +rangeM[2] : 0;
+    const m2 = rangeM[4] ? +rangeM[4] : 0;
+    const st = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[1], m1, 0);
+    const en = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +rangeM[3], m2, 0);
     task.start = st.getTime();
     task.dur = Math.max(MS.h, en - st);
+  } else if (nowM) {
+    task.start = Date.now();
+    if (nowM[1]) {
+      const v = parseFloat(nowM[1]);
+      task.dur = nowM[2] === 'h' ? v * MS.h : v * 60000;
+    }
   } else {
     const durM = s.match(/"(\d+(?:\.\d+)?)(h|m|min)?"/);
     if (durM) {
@@ -866,7 +877,6 @@ function parseCommand(raw) {
   if (!task.tytul) task.tytul = 'Zadanie ' + task.id;
   return task;
 }
-
 let consoleMode = false;
 let editingTask = null;
 
