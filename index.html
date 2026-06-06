@@ -338,6 +338,7 @@ notes: ''
 
 let cryptoKey = null;
 let workerUrl = '';
+let viewSaveTimer;
 
 const $ = id => document.getElementById(id);
 
@@ -769,6 +770,10 @@ function render() {
   renderTasks();
   updateStats();
   updateHover();
+  clearTimeout(viewSaveTimer);
+viewSaveTimer = setTimeout(() => {
+  localStorage.setItem('chronos_view', JSON.stringify({ pan: S.pan, zoom: S.zoom }));
+}, 500);
 }
 
 window.addEventListener('mousemove', e => {
@@ -1422,7 +1427,13 @@ async function boot(url, password) {
   $('auth').style.display = 'none';
   $('app').style.display = 'flex';
 
-  S.zoom = ZOOM_PRESETS[1];
+  const savedView = JSON.parse(localStorage.getItem('chronos_view') || 'null');
+  if (savedView) {
+    S.pan = savedView.pan || 0;
+    S.zoom = savedView.zoom || ZOOM_PRESETS[1];
+  } else {
+    S.zoom = ZOOM_PRESETS[1];
+  }
   if (S.db.length === 0) {
     const now = Date.now();
     S.db = [
