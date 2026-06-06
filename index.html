@@ -182,6 +182,8 @@ outline: none;
   border:1px solid var(--border);padding:1px 5px;
   color:var(--text3);border-radius:2px;letter-spacing:0.05em;white-space:nowrap;
 }
+.task.locked { border-style: dashed; }
+.task.locked::after { content: '🔒'; position: absolute; right: 4px; bottom: 2px; font-size: 10px; opacity: 0.7; }
 
 #help-panel {
   position: fixed; inset: 0; z-index: 9000; background: rgba(10, 10, 12, 0.85);
@@ -286,6 +288,7 @@ outline: none;
       <span>. / ,</span><span>Konsola / Zapisz edycję</span>
       <span>Spacja</span><span>Zmień status wykonania</span>
       <span>Del / Backspace</span><span>Usuń zadanie</span>
+      <span>L</span><span>Blokuj / Odblokuj pozycję</span>
       <span>E</span><span>Edytuj zadanie w konsoli</span>
       <span>T / C</span><span>Centruj NOW / Centruj zadanie</span>
       <span>1 - 5</span><span>Zmień poziom przybliżenia</span>
@@ -656,6 +659,8 @@ function renderTasks() {
         el.style.opacity = String((0.6 * (1 - (diff / 43200000))).toFixed(3));
       }
     }
+
+    if (task.locked) el.classList.add('locked');
     
     if (S.editingId === task.id) el.classList.add('editing-mode');
     if (S.compactMode) el.classList.add('task-compact');
@@ -802,7 +807,7 @@ function parseCommand(raw) {
   const task = {
     id: String(S.nextId++),
     tytul: '', komentarz: '', id_klienta: '', grupa: [],
-    start: 0, dur: MS.h, dur_real: 0, done: false, wykonano: 0,
+    start: 0, dur: MS.h, dur_real: 0, done: false, wykonano: 0, locked: false,
     poczatek_realizacji: null, koniec_realizacji: null,
     pliki: [], linked: [], parent: null, child: [], ile_trwalo: '',
   };
@@ -891,6 +896,7 @@ function closeConsole(save) {
           t.dur_real = t.dur_real || editingTask.dur_real || 0;
           t.done = editingTask.done;
           t.wykonano = editingTask.wykonano;
+          t.locked = editingTask.locked || false;
           t.poczatek_realizacji = new Date(t.start).toISOString();
           t.koniec_realizacji = new Date(t.start + t.dur).toISOString();
           S.db[idx] = t;
@@ -977,7 +983,7 @@ function pushRight(movedIdx, depth) {
   for (let i = 0; i < S.db.length; i++) {
     if (i === movedIdx) continue;
     const o = S.db[i];
-    if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
+    if (o.locked || (o.done && Date.now() - (o.start + o.dur) >= 43200000)) continue;
     if (o.start < myEnd && o.start + o.dur > t.start) {
       const newStart = myEnd;
       if (newStart !== o.start) {
@@ -996,7 +1002,7 @@ function pushLeft(movedIdx, depth) {
   for (let i = 0; i < S.db.length; i++) {
     if (i === movedIdx) continue;
     const o = S.db[i];
-    if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
+    if (o.locked || (o.done && Date.now() - (o.start + o.dur) >= 43200000)) continue;
     if (o.start < t.start + t.dur && o.start + o.dur > myStart) {
       const newStart = myStart - o.dur;
       if (newStart !== o.start) {
@@ -1018,7 +1024,7 @@ function resolveOverlapSnap(idx) {
     for (let i = 0; i < S.db.length; i++) {
       if (i === idx) continue;
       const o = S.db[i];
-      if (o.done && Date.now() - (o.start + o.dur) >= 43200000) continue;
+      if (o.locked || (o.done && Date.now() - (o.start + o.dur) >= 43200000)) continue;
       if (t.start < o.start + o.dur && t.start + t.dur > o.start) {
         const overlapL = (o.start + o.dur) - t.start;
         const overlapR = (t.start + t.dur) - o.start;
@@ -1041,6 +1047,7 @@ tasksLayer.addEventListener('mousedown', e => {
   if (!el || el.dataset.idx === undefined) return;
   e.stopPropagation();
   const idx = +el.dataset.idx;
+  if (S.db[idx].locked) return;
   S.focusIdx = idx;
   taskDragging = true;
   wasDragging = false;
@@ -1176,7 +1183,7 @@ tlEl.addEventListener('wheel', e => {
   if (S.holding.a) {
     scrollState.a.accum += dy;
     if (Math.abs(scrollState.a.accum) > 50) {
-      if (S.focusIdx < 0 || !S.db[S.focusIdx]) return;
+      if (S.focusIdx < 0 || !S.db[S.focusIdx] || S.db[S.focusIdx].locked) return;
       const dir = scrollState.a.accum > 0 ? 1 : -1;
       const steps = Math.floor(Math.abs(scrollState.a.accum) / 50);
       scrollState.a.accum = 0;
@@ -1274,6 +1281,17 @@ tlEl.addEventListener('wheel', e => {
       S.editingId=null; editingTask=null;
       cloudSave();
       render();
+    }
+    return;
+  }
+
+  if (e.key==='l'||e.key==='L') {
+    e.preventDefault();
+    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+      saveHistory();
+      S.db[S.focusIdx].locked = !S.db[S.focusIdx].locked;
+      render();
+      cloudSaveImmediate();
     }
     return;
   }
