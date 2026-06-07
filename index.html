@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>HABITASK — 1D Timeline Engine</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;700;800&display=swap');
@@ -17,7 +17,7 @@
   --done:#2a3a2a;--done-border:#3a5a3a;
   --font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
 }
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px}
+html,body{height:100%;height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px}
 #auth{
   position:fixed;inset:0;z-index:9999;background:var(--bg);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
@@ -198,6 +198,33 @@ outline: none;
 .help-grid span:nth-child(odd) {
   color: var(--text); font-weight: bold; text-align: right;
 }
+
+#timeline { touch-action: none; }
+.task { touch-action: none; }
+
+@media (max-width: 600px) {
+  #stats {
+    display: flex;
+    flex-wrap: wrap;
+    height: auto;
+    max-height: 35vh;
+    overflow-y: auto;
+    padding: 12px;
+    padding-bottom: 80px;
+    gap: 12px;
+    align-content: flex-start;
+  }
+  .stat-item { flex: 1 1 40%; font-size: 12px; }
+  .stat-item input[type="checkbox"] { width: 24px; height: 24px; flex-shrink: 0; }
+  #cmd-bar { flex-wrap: wrap; height: auto; padding: 8px; }
+  #cmd-input { order: 10; width: 100%; min-width: 100%; margin-top: 8px; }
+  #sticker-panel { width: 90vw; right: 5vw; top: 120px; }
+  .help-content { max-height: 90vh; overflow-y: auto; padding: 16px; margin: 10px; }
+  .help-grid { grid-template-columns: 1fr; }
+  .task-compact { height: 38px!important; }
+  .task-title { font-size: 13px; }
+  #auth-form { width: 90vw; }
+}
 </style>
 </head>
 <body>
@@ -243,6 +270,11 @@ outline: none;
     <div id="tasks-layer"></div>
     <div id="now-line"></div>
     <button id="sticker-icon">▤</button>
+    <div id="mobile-actions" style="display:none">
+      <button id="btn-m-done">✅</button>
+      <button id="btn-m-lock">🔒</button>
+      <button id="btn-m-del">❌</button>
+    </div>
     <div id="sticker-panel">
     <textarea id="sticker-textarea" spellcheck="false" placeholder="Szybka notatka..."></textarea>
     </div>
@@ -767,33 +799,14 @@ function render() {
   updateStats();
   updateHover();
   clearTimeout(viewSaveTimer);
-viewSaveTimer = setTimeout(() => {
-  localStorage.setItem('chronos_view', JSON.stringify({ pan: S.pan, zoom: S.zoom }));
-}, 500);
+  viewSaveTimer = setTimeout(() => {
+    localStorage.setItem('chronos_view', JSON.stringify({ pan: S.pan, zoom: S.zoom }));
+  }, 500);
+  const ma = $('mobile-actions');
+  if (ma) {
+    ma.style.display = (window.innerWidth <= 600 && S.focusIdx >= 0) ? 'flex' : 'none';
+  }
 }
-
-window.addEventListener('mousemove', e => {
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-  if (panning) {
-    S.pan = panStartPan - (e.clientX - panStartX) * (S.zoom / canvas.width);
-    render();
-    return;
-  }
-  if (taskDragging && dragTaskIdx >= 0) {
-    wasDragging = true;
-    const oldStart = S.db[dragTaskIdx].start;
-    S.db[dragTaskIdx].start = applySnap(dragStartMs + (e.clientX - dragStartX) * (S.zoom / canvas.width));
-    if (isMovable()) {
-      if (S.db[dragTaskIdx].start < oldStart) pushLeft(dragTaskIdx);
-      else if (S.db[dragTaskIdx].start > oldStart) pushRight(dragTaskIdx);
-    }
-    else resolveOverlapSnap(dragTaskIdx);
-    render();
-  } else {
-    updateHover();
-  }
-});
 
 function updateStats() {
   const total = S.db.length;
@@ -1059,7 +1072,7 @@ function resolveOverlapSnap(idx) {
 }
 
 
-tasksLayer.addEventListener('mousedown', e => {
+tasksLayer.addEventListener('pointerdown', e => {
   if (consoleMode) return;
   const el = e.target.closest('.task');
   if (!el || el.dataset.idx===undefined) return;
@@ -1077,7 +1090,7 @@ tasksLayer.addEventListener('mousedown', e => {
   render();
 });
 
-tlEl.addEventListener('mousedown', e => {
+tlEl.addEventListener('pointerdown', e => {
   if (consoleMode) return;
   if (e.target !== tlEl && e.target !== canvas) return;
   panning = true;
@@ -1086,7 +1099,65 @@ tlEl.addEventListener('mousedown', e => {
   tlEl.style.cursor = 'grabbing';
 });
 
-window.addEventListener('mouseup', () => {
+cmdInput.addEventListener('pointerdown', () => {
+  if (!consoleMode) openConsole();
+});
+
+let lastTapTime = 0;
+tasksLayer.addEventListener('pointerdown', e => {
+  if (consoleMode) return;
+  const el = e.target.closest('.task');
+  if (!el || el.dataset.idx === undefined) return;
+  e.stopPropagation();
+  const idx = +el.dataset.idx;
+  const now = Date.now();
+  if (now - lastTapTime < 300 && S.focusIdx === idx) {
+    editingTask = S.db[idx];
+    S.editingId = editingTask.id;
+    const t = editingTask;
+    let cmd = `'${t.tytul||t.title||''}'`;
+    if (t.komentarz||t.note) cmd += ` --(${t.komentarz||t.note})--`;
+    if (t.id_klienta||t.client) cmd += ` @${t.id_klienta||t.client}`;
+    if (t.grupa&&t.grupa.length) cmd += ` #${t.grupa[0]}`;
+    else if (t.group) cmd += ` #${t.group}`;
+    if (t.dur_real && t.dur_real > 0) cmd += ` ^"${formatDur(t.dur_real)}"`;
+    if (t.ile_trwalo) cmd += ` ~"${t.ile_trwalo}"`;
+    cmd += ` "${formatDur(t.dur)}"`;
+    openConsole(cmd);
+    cmdInput.classList.add('editing');
+    return;
+  }
+  lastTapTime = now;
+  if (S.db[idx].locked) return;
+  S.focusIdx = idx;
+  taskDragging = true;
+  wasDragging = false;
+  dragTaskIdx = idx;
+  dragStartX = e.clientX;
+  dragStartMs = S.db[idx].start;
+  dragPreSnap = S.db[idx].start;
+  tlEl.style.cursor = 'grabbing';
+  render();
+});
+
+let initialPinchDist = null, initialZoom = null;
+tlEl.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    initialPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    initialZoom = S.zoom;
+  }
+}, {passive: false});
+
+tlEl.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    S.zoom = Math.max(MS.h * 0.5, Math.min(MS.y * 5, initialZoom * (initialPinchDist / dist)));
+    render();
+  }
+}, {passive: false});
+
+window.addEventListener('pointerup', () => {
   if (taskDragging) {
     taskDragging = false;
     if (wasDragging && dragTaskIdx >= 0) {
@@ -1102,51 +1173,26 @@ window.addEventListener('mouseup', () => {
   if (panning) { panning = false; tlEl.style.cursor = 'default'; }
 });
 
-window.addEventListener('mousemove', e => {
+window.addEventListener('pointermove', e => {
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
   if (panning) {
     S.pan = panStartPan - (e.clientX - panStartX) * (S.zoom / canvas.width);
     render();
     return;
   }
-  
   if (taskDragging && dragTaskIdx >= 0) {
     wasDragging = true;
+    const oldStart = S.db[dragTaskIdx].start;
     S.db[dragTaskIdx].start = applySnap(dragStartMs + (e.clientX - dragStartX) * (S.zoom / canvas.width));
-    if (isMovable()) pushRight(dragTaskIdx);
+    if (isMovable()) {
+      if (S.db[dragTaskIdx].start < oldStart) pushLeft(dragTaskIdx);
+      else if (S.db[dragTaskIdx].start > oldStart) pushRight(dragTaskIdx);
+    }
     else resolveOverlapSnap(dragTaskIdx);
     render();
-  }
-
-  if (S.sToggle) {
-    let tIdx = undefined;
-    if (taskDragging && dragTaskIdx >= 0) {
-      tIdx = dragTaskIdx;
-    } else {
-      const el = e.target.closest('.task');
-      if (el) tIdx = el.dataset.idx;
-    }
-
-    if (tIdx !== undefined) {
-      const t = S.db[tIdx];
-      const st = formatTime(t.start, 'HH:MM');
-      const en = formatTime(t.start + t.dur, 'HH:MM');
-      const dr = formatDur(t.dur);
-      const cl = t.id_klienta || t.client || '';
-      const gr = Array.isArray(t.grupa) && t.grupa.length ? t.grupa.join(', ') : (t.group || '');
-      const nt = t.komentarz || t.note || '';
-      
-      let det = `${st} - ${en}<br>⏳ ${dr}`;
-      if (cl) det += `<br>${cl}`;
-      if (gr) det += `<br>${gr}`;
-      if (nt) det += `<br>${nt}`;
-      
-      hoverLabel.innerHTML = `<div class="hl-title">${t.tytul || t.title || ''}</div><div class="hl-details">${det}</div>`;
-      hoverLabel.style.display = 'block';
-      hoverLabel.style.left = (e.clientX + 15) + 'px';
-      hoverLabel.style.top = (e.clientY + 15) + 'px';
-    } else {
-      hoverLabel.style.display = 'none';
-    }
+  } else {
+    updateHover();
   }
 });
 tasksLayer.addEventListener('click', e => {
@@ -1616,6 +1662,38 @@ function renderSearchResults(query) {
   });
   box.style.display = 'flex';
 }
+$('btn-m-del').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  if (S.focusIdx >= 0 && S.db[S.focusIdx]) {
+    saveHistory();
+    S.db.splice(S.focusIdx, 1);
+    S.focusIdx = -1;
+    cloudSave();
+    render();
+  }
+});
+
+$('btn-m-lock').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  if (S.focusIdx >= 0 && S.db[S.focusIdx]) {
+    saveHistory();
+    S.db[S.focusIdx].locked = !S.db[S.focusIdx].locked;
+    cloudSaveImmediate();
+    render();
+  }
+});
+
+$('btn-m-done').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  if (S.focusIdx >= 0 && S.db[S.focusIdx]) {
+    saveHistory();
+    const t = S.db[S.focusIdx];
+    t.done = !t.done;
+    t.wykonano = t.done ? 1 : 0;
+    cloudSaveImmediate();
+    render();
+  }
+});
 
 function selectSearchResult(t) {
   const idx = S.db.findIndex(x => x.id===t.id);
