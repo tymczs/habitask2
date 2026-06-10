@@ -840,7 +840,7 @@ function parseCommand(raw) {
     s = s.slice(fw.length).trim();
   }
 
-  const noteM = s.match(/--([^-]+)--/);
+  const noteM = s.match(/--([\s\S]*?)--/);
   if (noteM) { task.komentarz = noteM[1].trim(); s = s.replace(noteM[0],'').trim(); }
 
   const clientM = s.match(/@(\S+)/);
