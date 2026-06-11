@@ -361,8 +361,16 @@ holding: { q: false, a: false, z: false },
 db: [],
 nextId: 1,
 currentFile: 'timeline-db.enc',
-notes: ''
+notes: '',
+sessions: []
 };
+function getNowFmt() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())}:${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+const curSession = { entry: getNowFmt(), latest: getNowFmt() };
 
 let cryptoKey = null;
 let workerUrl = '';
@@ -423,7 +431,7 @@ async function cloudSave() {
 if (!cryptoKey || !workerUrl) return;
 showSync(true);
 try {
-const plain = JSON.stringify({ tasks: S.db, notes: S.notes });
+const plain = JSON.stringify({ tasks: S.db, notes: S.notes, sessions: S.sessions });
 const cipher = await encryptData(cryptoKey, plain);
 await cloudPut(cipher);
 } catch (_) {}
@@ -434,7 +442,7 @@ async function cloudSaveImmediate() {
 if (!cryptoKey || !workerUrl) return;
 showSync(true);
 try {
-const plain = JSON.stringify({ tasks: S.db, notes: S.notes });
+const plain = JSON.stringify({ tasks: S.db, notes: S.notes, sessions: S.sessions });
 const cipher = await encryptData(cryptoKey, plain);
 await cloudPut(cipher);
 } catch (_) {}
@@ -1462,26 +1470,34 @@ async function boot(url, password) {
     $('auth-status').textContent = 'Pobieranie danych…';
     const cipher = await fetch(workerUrl + '/' + target, { cache: 'no-store' }).then(r => r.text());
 
-  if (cipher) {
+    if (cipher) {
     try {
-    const plain = await decryptData(cryptoKey, cipher);
-    const parsed = JSON.parse(plain);
-    if (Array.isArray(parsed)) {
-    S.db = parsed.map(t => ({ dur_real: 0, ...t }));
-    S.notes = '';
-    } else {
-    S.db = (parsed.tasks || []).map(t => ({ dur_real: 0, ...t }));
-    S.notes = parsed.notes || '';
-    }
-    $('sticker-textarea').value = S.notes;
+      const plain = await decryptData(cryptoKey, cipher);
+      const parsed = JSON.parse(plain);
+      if (Array.isArray(parsed)) {
+        S.db = parsed.map(t => ({ dur_real: 0, ...t }));
+        S.notes = '';
+        S.sessions = [];
+      } else {
+        S.db = (parsed.tasks || []).map(t => ({ dur_real: 0, ...t }));
+        S.notes = parsed.notes || '';
+        S.sessions = parsed.sessions || [];
+      }
+      $('sticker-textarea').value = S.notes;
     } catch (e) {
-    throw new Error('Błąd deszyfrowania lub złe hasło');
+      throw new Error('Błąd deszyfrowania lub złe hasło');
     }
-    } else {
+  } else {
     S.db = [];
     S.notes = '';
+    S.sessions = [];
     $('sticker-textarea').value = S.notes;
-    }
+  }
+
+  S.sessions.push(curSession);
+  setInterval(() => { curSession.latest = getNowFmt(); }, 60000);
+  setTimeout(cloudSaveImmediate, 2000);
+
   } catch (e) {
     $('auth-err').textContent = 'Błąd połączenia: ' + e.message;
     $('auth-status').textContent = '';
@@ -1549,11 +1565,10 @@ $('auth-pass').addEventListener('keydown', e => {
 let originalJson = "";
 
 $('btn-edit-json').addEventListener('click', () => {
-  originalJson = JSON.stringify({ tasks: S.db, notes: S.notes }, null, 2);
+  originalJson = JSON.stringify({ tasks: S.db, notes: S.notes, sessions: S.sessions }, null, 2);
   $('json-editor').value = originalJson;
   $('json-panel').style.display = 'flex';
 });
-
 $('json-discard').addEventListener('click', () => {
   $('json-panel').style.display = 'none';
 });
@@ -1578,7 +1593,7 @@ $('json-save').addEventListener('click', () => {
 });
 
 $('btn-download').addEventListener('click', () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ tasks: S.db, notes: S.notes }, null, 2));
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ tasks: S.db, notes: S.notes, sessions: S.sessions }, null, 2));
   const a = document.createElement('a');
   a.setAttribute("href", dataStr);
   a.setAttribute("download", "chronos_db_" + Date.now() + ".json");
@@ -1587,8 +1602,38 @@ $('btn-download').addEventListener('click', () => {
   a.remove();
 });
 
-$('btn-upload').addEventListener('click', () => $('file-upload').click());
-
+$('file-upload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const importedDb = JSON.parse(event.target.result);
+      if (Array.isArray(importedDb)) {
+        S.db = importedDb.map(t => ({ dur_real: 0, ...t }));
+      } else {
+        S.db = (importedDb.tasks || []).map(t => ({ dur_real: 0, ...t }));
+        S.notes = importedDb.notes || '';
+        S.sessions = importedDb.sessions || [];
+        $('sticker-textarea').value = S.notes;
+      }
+      saveHistory();
+      render();
+      const filename = `timeline-db-v${Date.now()}.enc`;
+      S.currentFile = filename;
+      const encrypted = await encryptData(cryptoKey, JSON.stringify({ tasks: S.db, notes: S.notes, sessions: S.sessions }));
+      await fetch(workerUrl + '/' + filename, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: encrypted
+      });
+      alert("Wgrano zaszyfrowany plik: " + filename);
+    } catch (err) {
+      alert("Błąd: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
 $('file-upload').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
