@@ -967,13 +967,13 @@ cmdInput.addEventListener('keydown', e => {
   const isSearching = box.style.display==='flex';
   
   if (isSearching) {
-    if (e.key==='ArrowDown') { e.preventDefault(); searchIndex = Math.min(searchIndex + 1, searchResults.length - 1); renderSearchResults(cmdInput.value); return; }
-    if (e.key==='ArrowUp') { e.preventDefault(); searchIndex = Math.max(searchIndex - 1, 0); renderSearchResults(cmdInput.value); return; }
-    if (e.key==='Enter' && searchIndex >= 0) { e.preventDefault(); selectSearchResult(searchResults[searchIndex]); return; }
+    if (e.code==='ArrowDown') { e.preventDefault(); searchIndex = Math.min(searchIndex + 1, searchResults.length - 1); renderSearchResults(cmdInput.value); return; }
+    if (e.code==='ArrowUp') { e.preventDefault(); searchIndex = Math.max(searchIndex - 1, 0); renderSearchResults(cmdInput.value); return; }
+    if (e.code==='Enter' && searchIndex >= 0) { e.preventDefault(); selectSearchResult(searchResults[searchIndex]); return; }
   }
   
-  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); closeConsole(true); $('search-results').style.display = 'none'; }
-  if (e.key==='Escape') { e.preventDefault(); closeConsole(false); $('search-results').style.display = 'none'; }
+  if (e.code==='Enter' && !e.shiftKey) { e.preventDefault(); closeConsole(true); $('search-results').style.display = 'none'; }
+  if (e.code==='Escape') { e.preventDefault(); closeConsole(false); $('search-results').style.display = 'none'; }
 });
 
 let panning = false, panStartX = 0, panStartPan = 0;
@@ -1304,40 +1304,48 @@ tlEl.addEventListener('wheel', e => {
 window.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName.toLowerCase();
   if (tag === 'input' || tag === 'textarea') {
-    if (e.key === 'Escape') {
+    if (e.code === 'Escape') {
       e.target.blur();
-    } else {
-      if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
-      if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); }
       return;
+    } else {
+      if ((e.ctrlKey||e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
+      if ((e.ctrlKey||e.metaKey) && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
+      if (!e.altKey) return;
     }
   }
-  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
-  if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); return; }
+  
+  if ((e.ctrlKey||e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey||e.metaKey) && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
 
-  if (e.key==='.') { e.preventDefault(); openConsole(); return; }
+  if (e.code === 'Period') { e.preventDefault(); openConsole(); return; }
 
-  if (e.key==='q'||e.key==='Q') { S.holding.q = true; updateHover(); }
-  if (e.key==='a'||e.key==='A') S.holding.a = true;
-  if (e.key==='z'||e.key==='Z') S.holding.z = true;
+  if (e.code === 'KeyQ') { S.holding.q = true; updateHover(); }
+  if (e.code === 'KeyA') S.holding.a = true;
+  if (e.code === 'KeyZ') S.holding.z = true;
 
-  if (e.key==='m'||e.key==='M') { e.preventDefault(); $('movable-chk').checked = !$('movable-chk').checked; return; }
-  if (e.key==='n'||e.key==='N') { e.preventDefault(); S.sToggle = !S.sToggle; $('name-chk').checked = S.sToggle; if (!S.sToggle) hoverLabel.style.display = 'none'; return; }
-  if (e.key==='d'||e.key==='D') { e.preventDefault(); S.showDone = !S.showDone; $('done-chk').checked = S.showDone; render(); return; }
-  if (e.key==='t'||e.key==='T') { S.pan=0; render(); return; }
-  if (e.key==='c'||e.key==='C') {
-    if (e.key>='1'&&e.key<='5') { S.zoom=ZOOM_PRESETS[+e.key-1]; render(); return; }
-    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+  if (e.code === 'KeyM') { e.preventDefault(); $('movable-chk').checked = !$('movable-chk').checked; return; }
+  if (e.code === 'KeyN') { e.preventDefault(); S.sToggle = !S.sToggle; $('name-chk').checked = S.sToggle; if (!S.sToggle) hoverLabel.style.display = 'none'; return; }
+  if (e.code === 'KeyD') { e.preventDefault(); S.showDone = !S.showDone; $('done-chk').checked = S.showDone; render(); return; }
+  if (e.code === 'KeyT') { S.pan=0; render(); return; }
+  
+  if (e.code === 'KeyC') {
+    if (S.focusIdx>=0 && S.db[S.focusIdx]) {
       const t=S.db[S.focusIdx]; S.pan=Date.now()-(t.start+t.dur/2);
     }
     render(); return;
   }
-  if (e.key==='w'||e.key==='W') { S.compactMode=!S.compactMode; render(); return; }
-  if (e.key==='d'||e.key==='D') { S.showDone=!S.showDone; render(); return; }
+  
+  if (e.code.startsWith('Digit') && e.code >= 'Digit1' && e.code <= 'Digit5') { 
+    S.zoom=ZOOM_PRESETS[+e.code-1]; 
+    render(); 
+    return; 
+  }
 
-  if (e.key===' ') {
+  if (e.code === 'KeyW') { S.compactMode=!S.compactMode; render(); return; }
+
+  if (e.code === 'Space') {
     e.preventDefault();
-    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+    if (S.focusIdx>=0 && S.db[S.focusIdx]) {
       saveHistory();
       const task = S.db[S.focusIdx];
       task.done = !task.done;
@@ -1347,10 +1355,9 @@ window.addEventListener('keydown', e => {
     }
     return;
   }
-  
 
-  if (e.key==='Delete'||e.key==='Backspace') {
-    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    if (S.focusIdx>=0 && S.db[S.focusIdx]) {
       saveHistory();
       S.db.splice(S.focusIdx,1);
       S.focusIdx=Math.min(S.focusIdx,S.db.length-1);
@@ -1361,9 +1368,9 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key==='l'||e.key==='L') {
+  if (e.code === 'KeyL') {
     e.preventDefault();
-    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+    if (S.focusIdx>=0 && S.db[S.focusIdx]) {
       saveHistory();
       S.db[S.focusIdx].locked = !S.db[S.focusIdx].locked;
       render();
@@ -1372,9 +1379,9 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key==='e'||e.key==='E') {
+  if (e.code === 'KeyE') {
     e.preventDefault();
-    if (S.focusIdx>=0&&S.db[S.focusIdx]) {
+    if (S.focusIdx>=0 && S.db[S.focusIdx]) {
       editingTask=S.db[S.focusIdx];
       S.editingId=editingTask.id;
       const t=editingTask;
@@ -1392,14 +1399,14 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key==='h'||e.key==='H') {
+  if (e.code === 'KeyH') {
     e.preventDefault();
     const p = $('help-panel');
     p.style.display = p.style.display==='flex' ? 'none' : 'flex';
     return;
   }
   
-  if (e.key === 'Escape') {
+  if (e.code === 'Escape') {
     const sp = $('sticker-panel');
     if (sp && sp.style.display === 'flex') {
       sp.style.display = 'none';
@@ -1425,7 +1432,7 @@ window.addEventListener('keydown', e => {
     }
   }
 
-  if (e.key==='j' || e.key==='J') {
+  if (e.code === 'KeyJ') {
     e.preventDefault();
     const jp = $('json-panel');
     if (jp && jp.style.display==='flex') jp.style.display = 'none';
@@ -1433,17 +1440,16 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key==='/') {
+  if (e.code === 'Slash') {
     e.preventDefault();
     $('sticker-icon').click();
     return;
   }
 });
-
 window.addEventListener('keyup', e => {
-  if (e.key==='q'||e.key==='Q') { S.holding.q = false; updateHover(); }
-  if (e.key==='a'||e.key==='A') S.holding.a = false;
-  if (e.key==='z'||e.key==='Z') S.holding.z = false;
+  if (e.code==='q'||e.code==='Q') { S.holding.q = false; updateHover(); }
+  if (e.code==='a'||e.code==='A') S.holding.a = false;
+  if (e.code==='z'||e.code==='Z') S.holding.z = false;
 });
 
 async function boot(url, password) {
@@ -1545,6 +1551,16 @@ window.addEventListener('load', () => {
   if (url && pass) {
     $('auth-url').value = url;
     $('auth-pass').value = pass;
+    const keepFocus = () => $('auth-btn').focus();
+    $('auth-url').addEventListener('focus', keepFocus);
+    $('auth-pass').addEventListener('focus', keepFocus);
+    setTimeout(() => {
+      $('auth-url').removeEventListener('focus', keepFocus);
+      $('auth-pass').removeEventListener('focus', keepFocus);
+    }, 1000);
+    $('auth-btn').focus();
+  } else {
+    $('auth-url').focus();
   }
 });
 
@@ -1559,7 +1575,7 @@ $('auth-btn').addEventListener('click', () => {
 });
 
 $('auth-pass').addEventListener('keydown', e => {
-  if (e.key==='Enter') $('auth-btn').click();
+  if (e.code==='Enter') $('auth-btn').click();
 });
 
 let originalJson = "";
