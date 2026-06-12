@@ -911,14 +911,13 @@ function openConsole(prefill) {
   consoleMode = true;
   S.consoleMode = true;
   cmdInput.readOnly = false;
-  cmdInput.value = prefill || '';
+  cmdInput.value = prefill !== undefined ? prefill : cmdInput.value;
   cmdInput.placeholder = "'Tytuł' --notatka-- @klient #grupa ^\"dur_real\" \"2h\" | , — zapisz | Esc — anuluj";
   cmdInput.classList.remove('editing');
   cmdInput.focus();
   $('cmd-hint').textContent = editingTask ? 'EDYCJA' : 'NOWE';
   autoResizeInput();
 }
-
 function closeConsole(save) {
   if (save && cmdInput.value.trim()) {
     if (editingTask) {
@@ -1078,6 +1077,7 @@ function resolveOverlapSnap(idx) {
     }
   }
 }
+
 
 
 tasksLayer.addEventListener('pointerdown', e => {
