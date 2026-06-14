@@ -236,6 +236,7 @@ outline: none;
     <input id="auth-url" type="url" placeholder="Worker URL (https://...)" autocomplete="off" spellcheck="false">
     <input id="auth-pass" type="password" placeholder="Hasło szyfrowania (AES-256-GCM)" autocomplete="off">
     <button id="auth-btn">ZALOGUJ I POBIERZ</button>
+    <button id="map-btn">MAPA</button>
     <div id="auth-err"></div>
     <div id="auth-status"></div>
   </div>
@@ -1572,6 +1573,10 @@ $('auth-btn').addEventListener('click', () => {
   localStorage.setItem('chronos_url', url);
   localStorage.setItem('chronos_pass', pass);
   boot(url, pass);
+});
+
+$('map-btn').addEventListener('click', () => {
+  window.location.href = 'mapa.html';
 });
 
 $('auth-pass').addEventListener('keydown', e => {

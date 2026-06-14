@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.draw — rysowanie obiektów na mapie -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f14;
+      --panel:    #13161e;
+      --border:   #1f2433;
+      --accent:   #4f8ef7;
+      --accent2:  #34d399;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --danger:   #f87171;
+      --panel-w:  260px;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── TOPBAR ─────────────────────────────────────────── */
+    #topbar {
+      height: 48px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 20px;
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+
+    #topbar .logo {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    #topbar .coords {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── BODY LAYOUT ────────────────────────────────────── */
+    #workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────── */
+    #sidebar {
+      width: var(--panel-w);
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 9px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 14px 16px 6px;
+    }
+
+    /* ── WARSTWY ────────────────────────────────────────── */
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: background .15s;
+      font-size: 12px;
+    }
+    .layer-item:hover { background: #1a1f2e; }
+
+    .layer-item input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 14px; height: 14px;
+      cursor: pointer;
+    }
+
+    .layer-dot {
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── KAFELKI / BASEMAP ──────────────────────────────── */
+    .tile-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 6px 16px 10px;
+    }
+
+    .tile-btn {
+      background: #1a1f2e;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 7px 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .15s, background .15s;
+    }
+    .tile-btn:hover { border-color: var(--accent); }
+    .tile-btn.active { border-color: var(--accent); background: #1a2540; color: var(--accent); }
+
+    /* ── PANEL NARZĘDZI ─────────────────────────────────── */
+    .tool-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 4px 16px 12px;
+    }
+
+    .tool-btn {
+      background: #1a1f2e;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 8px 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color .15s, background .15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tool-btn:hover { border-color: var(--accent2); }
+    .tool-btn .icon { font-size: 14px; }
+
+    /* ── KOLOR PICKER ───────────────────────────────────── */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 16px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .color-row input[type="color"] {
+      width: 28px; height: 24px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: none;
+      cursor: pointer;
+      padding: 2px;
+    }
+    .opacity-row {
+      padding: 0 16px 12px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .opacity-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 100%;
+    }
+
+    /* ── LISTA OBIEKTÓW ─────────────────────────────────── */
+    #object-list {
+      flex: 1;
+      min-height: 80px;
+      padding: 0 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .obj-entry {
+      background: #1a1f2e;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .obj-entry span { color: var(--muted); }
+    .obj-del {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+
+    /* ── MAPA ───────────────────────────────────────────── */
+    #map {
+      flex: 1;
+      height: 100%;
+    }
+
+    /* Leaflet overrides */
+    .leaflet-container { background: #0d0f14; }
+    .leaflet-control-zoom a {
+      background: var(--panel) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-control-zoom a:hover { background: #1a1f2e !important; }
+    .leaflet-bar { border-color: var(--border) !important; }
+
+    /* Scrollbar */
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-track { background: transparent; }
+    #sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── SEPARATOR ──────────────────────────────────────── */
+    .sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <span class="logo">◈ GeoViewer</span>
+  <span class="coords" id="coords">Najedź na mapę</span>
+</div>
+
+<!-- WORKSPACE -->
+<div id="workspace">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+
+    <!-- BASEMAP -->
+    <div class="section-title">Podkład mapy</div>
+    <div class="tile-grid">
+      <button class="tile-btn active" data-tile="osm">OSM</button>
+      <button class="tile-btn" data-tile="topo">Topo</button>
+      <button class="tile-btn" data-tile="dark">Ciemna</button>
+      <button class="tile-btn" data-tile="satellite">Satelita</button>
+    </div>
+
+    <hr class="sep" />
+
+    <!-- WARSTWY GeoJSON -->
+    <div class="section-title">Warstwy danych</div>
+
+    <label class="layer-item">
+      <input type="checkbox" data-layer="countries" checked />
+      <span class="layer-dot" style="background:#4f8ef7"></span>
+      Granice państw
+    </label>
+    <label class="layer-item">
+      <input type="checkbox" data-layer="rivers" />
+      <span class="layer-dot" style="background:#38bdf8"></span>
+      Rzeki świata
+    </label>
+    <label class="layer-item">
+      <input type="checkbox" data-layer="capitals" />
+      <span class="layer-dot" style="background:#fbbf24; border-radius:50%;"></span>
+      Stolice
+    </label>
+
+    <hr class="sep" />
+
+    <!-- NARZĘDZIA RYSOWANIA -->
+    <div class="section-title">Rysuj na mapie</div>
+    <div class="tool-row">
+      <button class="tool-btn" id="btn-polygon"><span class="icon">⬡</span> Poligon (obszar)</button>
+      <button class="tool-btn" id="btn-polyline"><span class="icon">╱</span> Linia (droga/rzeka)</button>
+      <button class="tool-btn" id="btn-circle"><span class="icon">◎</span> Okrąg</button>
+      <button class="tool-btn" id="btn-marker"><span class="icon">◉</span> Punkt</button>
+      <button class="tool-btn" id="btn-clear" style="border-color:#f87171;color:#f87171"><span class="icon">✕</span> Usuń wszystko</button>
+    </div>
+
+    <hr class="sep" />
+
+    <!-- KOLOR I OPACITY -->
+    <div class="section-title">Styl</div>
+    <div class="color-row">
+      <input type="color" id="fill-color" value="#34d399" title="Kolor wypełnienia" />
+      <span>Wypełnienie</span>
+      <input type="color" id="stroke-color" value="#ffffff" title="Kolor obrysu" />
+      <span>Obrys</span>
+    </div>
+    <div class="opacity-row">
+      <span>Przezroczystość: <b id="opacity-val">50%</b></span>
+      <input type="range" id="opacity-range" min="0" max="100" value="50" />
+    </div>
+
+    <hr class="sep" />
+
+    <!-- LISTA OBIEKTÓW -->
+    <div class="section-title">Narysowane obiekty</div>
+    <div id="object-list"></div>
+
+  </div>
+
+  <!-- MAPA -->
+  <div id="map"></div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// TILE LAYERS
+// ═══════════════════════════════════════════════════════════
+const tileLayers = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }),
+  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenTopoMap',
+    maxZoom: 17
+  }),
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© CartoDB',
+    maxZoom: 19
+  }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '© Esri',
+    maxZoom: 19
+  })
+};
+
+// ═══════════════════════════════════════════════════════════
+// MAPA
+// ═══════════════════════════════════════════════════════════
+const map = L.map('map', {
+  center: [20, 10],
+  zoom: 3,
+  layers: [tileLayers.osm]
+});
+
+// Koordynaty w topbarze
+map.on('mousemove', e => {
+  const lat = e.latlng.lat.toFixed(4);
+  const lng = e.latlng.lng.toFixed(4);
+  document.getElementById('coords').textContent = `${lat}°N  ${lng}°E`;
+});
+
+// ═══════════════════════════════════════════════════════════
+// ZMIANA BASEMAPY
+// ═══════════════════════════════════════════════════════════
+let activeLayer = tileLayers.osm;
+document.querySelectorAll('.tile-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    map.removeLayer(activeLayer);
+    activeLayer = tileLayers[btn.dataset.tile];
+    map.addLayer(activeLayer);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// GEOJSON WARSTWY — ładowane z publicznych API
+// ═══════════════════════════════════════════════════════════
+const geoLayers = {};
+
+// Granice państw — Natural Earth via GitHub
+const countriesLayer = L.geoJSON(null, {
+  style: {
+    color: '#4f8ef7',
+    weight: 0.8,
+    fillColor: '#1a2540',
+    fillOpacity: 0.3
+  },
+  onEachFeature: (feature, layer) => {
+    if (feature.properties?.ADMIN) {
+      layer.bindTooltip(feature.properties.ADMIN, { sticky: true, className: 'leaf-tip' });
+    }
+  }
+});
+geoLayers['countries'] = countriesLayer;
+
+// Stolice — publiczne GeoJSON
+const capitalsLayer = L.geoJSON(null, {
+  pointToLayer: (feature, latlng) =>
+    L.circleMarker(latlng, {
+      radius: 4,
+      fillColor: '#fbbf24',
+      color: '#000',
+      weight: 0.5,
+      fillOpacity: 0.85
+    }),
+  onEachFeature: (feature, layer) => {
+    if (feature.properties?.name) {
+      layer.bindTooltip(feature.properties.name, { sticky: true });
+    }
+  }
+});
+geoLayers['capitals'] = capitalsLayer;
+
+// Rzeki — Natural Earth
+const riversLayer = L.geoJSON(null, {
+  style: { color: '#38bdf8', weight: 1, opacity: 0.7 }
+});
+geoLayers['rivers'] = riversLayer;
+
+// ── Ładowanie danych ──────────────────────────────────────
+const geoSources = {
+  countries: 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson',
+  capitals:  'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/refs/heads/master/geojson/capitals.geojson',
+  rivers:    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson'
+};
+
+const loadedLayers = {};
+
+async function loadGeoLayer(key) {
+  if (loadedLayers[key]) return; // już załadowane
+  try {
+    const r = await fetch(geoSources[key]);
+    const data = await r.json();
+    geoLayers[key].addData(data);
+    loadedLayers[key] = true;
+  } catch(e) {
+    console.warn(`Nie udało się załadować warstwy: ${key}`, e);
+  }
+}
+
+// Checkboxy warstw
+document.querySelectorAll('input[data-layer]').forEach(cb => {
+  const key = cb.dataset.layer;
+
+  if (cb.checked) {
+    loadGeoLayer(key).then(() => geoLayers[key].addTo(map));
+  }
+
+  cb.addEventListener('change', async () => {
+    if (cb.checked) {
+      await loadGeoLayer(key);
+      geoLayers[key].addTo(map);
+    } else {
+      map.removeLayer(geoLayers[key]);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// RYSOWANIE OBIEKTÓW
+// ═══════════════════════════════════════════════════════════
+const drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
+
+let objectCounter = 0;
+
+function getStyle() {
+  const fill   = document.getElementById('fill-color').value;
+  const stroke = document.getElementById('stroke-color').value;
+  const opacity = parseInt(document.getElementById('opacity-range').value) / 100;
+  return { color: stroke, fillColor: fill, fillOpacity: opacity, weight: 2 };
+}
+
+function addToList(id, type) {
+  const list = document.getElementById('object-list');
+  const entry = document.createElement('div');
+  entry.className = 'obj-entry';
+  entry.dataset.id = id;
+  entry.innerHTML = `<span>#${id} ${type}</span><button class="obj-del" title="Usuń">✕</button>`;
+  entry.querySelector('.obj-del').addEventListener('click', () => {
+    drawnItems.eachLayer(layer => {
+      if (layer._geoId === id) drawnItems.removeLayer(layer);
+    });
+    entry.remove();
+  });
+  list.appendChild(entry);
+}
+
+function activateDraw(DrawClass, type, opts = {}) {
+  const handler = new DrawClass(map, { shapeOptions: { ...getStyle(), ...opts } });
+  handler.enable();
+  map.once(L.Draw.Event.CREATED, e => {
+    const layer = e.layer;
+    objectCounter++;
+    layer._geoId = objectCounter;
+    drawnItems.addLayer(layer);
+    addToList(objectCounter, type);
+  });
+}
+
+document.getElementById('btn-polygon').addEventListener('click',
+  () => activateDraw(L.Draw.Polygon, 'Poligon'));
+
+document.getElementById('btn-polyline').addEventListener('click',
+  () => activateDraw(L.Draw.Polyline, 'Linia'));
+
+document.getElementById('btn-circle').addEventListener('click',
+  () => activateDraw(L.Draw.Circle, 'Okrąg'));
+
+document.getElementById('btn-marker').addEventListener('click', () => {
+  const handler = new L.Draw.Marker(map, {});
+  handler.enable();
+  map.once(L.Draw.Event.CREATED, e => {
+    const layer = e.layer;
+    objectCounter++;
+    layer._geoId = objectCounter;
+    drawnItems.addLayer(layer);
+    addToList(objectCounter, 'Punkt');
+  });
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  drawnItems.clearLayers();
+  document.getElementById('object-list').innerHTML = '';
+  objectCounter = 0;
+});
+
+// ═══════════════════════════════════════════════════════════
+// OPACITY SLIDER LABEL
+// ═══════════════════════════════════════════════════════════
+document.getElementById('opacity-range').addEventListener('input', function() {
+  document.getElementById('opacity-val').textContent = this.value + '%';
+});
+</script>
+
+</body>
+</html>
