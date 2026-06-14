@@ -6,7 +6,6 @@
   <title>Mapa</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.smoothwheelzoom@1.0.0/dist/leaflet.smoothWheelZoom.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #map { width: 100%; height: 100dvh; }
@@ -19,7 +18,7 @@ const map = L.map('map', {
   center: [20, 10],
   zoom: 3,
   zoomControl: true,
-  attributionControl: false,
+  attributionControl: false
 });
 
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -32,39 +31,60 @@ fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/coun
     style: { color: '#ffffff', weight: 0.7, fillOpacity: 0 }
   }).addTo(map));
 
-  const CITIES = [
-  { name: 'Warszawa',       level: 6 },
-  { name: 'Kutno',          level: 8 },
-  { name: 'Łódź',           level: 6 },
-  { name: 'Gdańsk',         level: 6 },
-  { name: 'Gdynia',         level: 6 },
-  { name: 'Sopot',          level: 6 },
-  { name: 'Bielsko-Biała',  level: 6 }
+const CITIES = [
+  { name: 'Warszawa',      level: 6 },
+  { name: 'Kutno',         level: 8 },
+  { name: 'Łódź',          level: 6 },
+  { name: 'Gdańsk',        level: 6 },
+  { name: 'Gdynia',        level: 6 },
+  { name: 'Sopot',         level: 6 },
+  { name: 'Bielsko-Biała', level: 8 }
 ];
 
-const query = `
+const CITY_STYLE  = { color: '#facc15', weight: 0.4, opacity: 1, fillOpacity: 0 };
+const RIVER_STYLE = { color: '#38bdf8', weight: 0.8, opacity: 1, fillOpacity: 0 };
+
+fetch('https://overpass-api.de/api/interpreter', {
+  method: 'POST',
+  body: 'data=' + encodeURIComponent(`
 [out:json][timeout:30];
 (
 ${CITIES.map(c => `  relation["name"="${c.name}"]["admin_level"="${c.level}"]["boundary"="administrative"];`).join('\n')}
 );
 out geom;
-`;
-
-const STYLE = { color: '#facc15', weight: 0.4, opacity: 1 };
-
-fetch('https://overpass-api.de/api/interpreter', {
-  method: 'POST',
-  body: 'data=' + encodeURIComponent(query)
+  `)
 })
   .then(r => r.json())
   .then(({ elements }) => elements.forEach(el => {
     const lines = (el.members ?? [])
       .filter(m => m.type === 'way')
       .map(w => w.geometry.map(p => [p.lon, p.lat]));
-
-    L.geoJSON({ type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines } },
-      { style: STYLE }).addTo(map);
+    L.geoJSON(
+      { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines } },
+      { style: CITY_STYLE }
+    ).addTo(map);
   }));
+
+fetch('https://overpass-api.de/api/interpreter', {
+  method: 'POST',
+  body: 'data=' + encodeURIComponent(`
+[out:json][timeout:60];
+relation["name"="Wisła"]["waterway"="river"];
+out geom;
+  `)
+})
+  .then(r => r.json())
+  .then(({ elements }) => {
+    elements.forEach(el => {
+      const lines = (el.members ?? [])
+        .filter(m => m.type === 'way')
+        .map(w => w.geometry.map(p => [p.lon, p.lat]));
+      L.geoJSON(
+        { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines } },
+        { style: RIVER_STYLE }
+      ).addTo(map);
+    });
+  });
 </script>
 </body>
 </html>
