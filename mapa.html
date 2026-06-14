@@ -14,6 +14,31 @@
 <body>
 <div id="map"></div>
 <script>
+
+const CONFIG = {
+  cities: [
+    { name: 'Warszawa',      level: 6 },
+    { name: 'Kutno',         level: 8 },
+    { name: 'Łódź',          level: 6 },
+    { name: 'Gdańsk',        level: 6 },
+    { name: 'Gdynia',        level: 6 },
+    { name: 'Sopot',         level: 6 },
+    { name: 'Bielsko-Biała', level: 8 },
+    { name: 'Poznań',        level: 6 },
+    { name: 'Wrocław',       level: 6 },
+  ],
+  rivers: [
+    { name: 'Wisła',  tag: 'waterway', value: 'river' },
+    { name: 'Narew',  tag: 'waterway', value: 'river' },
+  ]
+};
+
+const STYLES = {
+  countries: { color: '#ffffff', weight: 0.7, fillOpacity: 0 },
+  cities:    { color: '#facc15', weight: 0.4, fillOpacity: 0 },
+  rivers:    { color: '#38bdf8', weight: 0.8, fillOpacity: 0 }
+};
+
 const map = L.map('map', {
   center: [20, 10],
   zoom: 3,
@@ -25,66 +50,26 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/
   maxZoom: 19
 }).addTo(map);
 
-fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
-  .then(r => r.json())
-  .then(data => L.geoJSON(data, {
-    style: { color: '#ffffff', weight: 0.7, fillOpacity: 0 }
-  }).addTo(map));
-
-const CITIES = [
-  { name: 'Warszawa',      level: 6 },
-  { name: 'Kutno',         level: 8 },
-  { name: 'Łódź',          level: 6 },
-  { name: 'Gdańsk',        level: 6 },
-  { name: 'Gdynia',        level: 6 },
-  { name: 'Sopot',         level: 6 },
-  { name: 'Bielsko-Biała', level: 8 }
-];
-
-const CITY_STYLE  = { color: '#facc15', weight: 0.4, opacity: 1, fillOpacity: 0 };
-const RIVER_STYLE = { color: '#38bdf8', weight: 0.8, opacity: 1, fillOpacity: 0 };
-
-fetch('https://overpass-api.de/api/interpreter', {
-  method: 'POST',
-  body: 'data=' + encodeURIComponent(`
-[out:json][timeout:30];
-(
-${CITIES.map(c => `  relation["name"="${c.name}"]["admin_level"="${c.level}"]["boundary"="administrative"];`).join('\n')}
-);
-out geom;
-  `)
-})
-  .then(r => r.json())
-  .then(({ elements }) => elements.forEach(el => {
+function renderBoundaries(elements, style) {
+  elements.forEach(el => {
     const lines = (el.members ?? [])
       .filter(m => m.type === 'way')
       .map(w => w.geometry.map(p => [p.lon, p.lat]));
     L.geoJSON(
       { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines } },
-      { style: CITY_STYLE }
+      { style }
     ).addTo(map);
-  }));
-
-fetch('https://overpass-api.de/api/interpreter', {
-  method: 'POST',
-  body: 'data=' + encodeURIComponent(`
-[out:json][timeout:60];
-relation["name"="Wisła"]["waterway"="river"];
-out geom;
-  `)
-})
-  .then(r => r.json())
-  .then(({ elements }) => {
-    elements.forEach(el => {
-      const lines = (el.members ?? [])
-        .filter(m => m.type === 'way')
-        .map(w => w.geometry.map(p => [p.lon, p.lat]));
-      L.geoJSON(
-        { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines } },
-        { style: RIVER_STYLE }
-      ).addTo(map);
-    });
   });
+}
+
+fetch('./data/data.json')
+  .then(r => r.json())
+  .then(db => {
+    L.geoJSON(db.countries, { style: STYLES.countries }).addTo(map);
+    CONFIG.cities.forEach(c  => db[c.name]  && renderBoundaries(db[c.name].elements,  STYLES.cities));
+    CONFIG.rivers.forEach(r  => db[r.name]  && renderBoundaries(db[r.name].elements,  STYLES.rivers));
+  });
+
 </script>
 </body>
 </html>
